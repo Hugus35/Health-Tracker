@@ -7,13 +7,6 @@ import MealEntry from './components/MealEntry'
 import Reporting from './components/Reporting'
 import Settings from './components/Settings'
 
-const tabs = {
-  journal:   <Journal />,
-  meal:      <MealEntry />,
-  reporting: <Reporting />,
-  settings:  <Settings />,
-}
-
 export default function App() {
   const [activeTab, setActiveTab] = useState('journal')
   const { settings, loading, updateSettings } = useSettings()
@@ -28,6 +21,15 @@ export default function App() {
 
   if (!settings?.weight_kg) {
     return <Onboarding onComplete={updateSettings} />
+  }
+
+  // Tabs reconstruits à chaque render — settings/updateSettings sont passés
+  // aux composants qui en ont besoin pour rester en phase avec App.
+  const tabs = {
+    journal:   <Journal />,
+    meal:      <MealEntry />,
+    reporting: <Reporting />,
+    settings:  <Settings settings={settings} updateSettings={updateSettings} />,
   }
 
   return (

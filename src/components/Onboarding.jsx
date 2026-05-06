@@ -1,5 +1,5 @@
+import { Minus, TrendingDown, TrendingUp } from 'lucide-react'
 import { useState } from 'react'
-import { TrendingDown, TrendingUp, Minus } from 'lucide-react'
 
 // ─── Constantes ──────────────────────────────────────────────
 // Les 3 objectifs possibles. value (-1/0/1) pilote les calculs.
@@ -20,7 +20,7 @@ function compute(weight, goal) {
 }
 
 // ─── Étape 1 — Poids ────────────────────────────────────────
-function StepWeight({ value, onChange, onNext }) {
+function StepWeight({ value, onChange, onNext, suggestion }) {
   return (
     <div className="flex flex-col gap-10">
       <div className="flex flex-col gap-1">
@@ -28,21 +28,21 @@ function StepWeight({ value, onChange, onNext }) {
         <p className="text-sm text-zinc-400">Utilisé pour estimer tes besoins caloriques.</p>
       </div>
 
-      <div className="flex items-center gap-3">
+      <div className="relative">
         <input
           type="number"
           inputMode="decimal"
           value={value}
           onChange={e => onChange(e.target.value)}
-          placeholder="75"
-          className="flex-1 bg-zinc-50 border border-zinc-200 rounded-2xl px-5 py-4 text-3xl font-medium text-zinc-900 placeholder:text-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-900 focus:bg-white transition-colors"
+          placeholder={String(suggestion)}
+          className="w-full bg-zinc-50 border border-zinc-200 rounded-2xl px-5 pr-16 py-4 text-3xl font-medium text-zinc-900 placeholder:text-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-900 focus:bg-white transition-colors"
         />
-        <span className="text-base text-zinc-400 font-medium">kg</span>
+        <span className="absolute right-5 top-1/2 -translate-y-1/2 text-base text-zinc-400 font-medium">kg</span>
       </div>
 
       <button
         onClick={onNext}
-        disabled={!value || parseFloat(value) <= 0}
+        disabled={!value && !suggestion}
         className="bg-zinc-900 text-white rounded-2xl py-4 text-base font-medium disabled:opacity-20 active:scale-[0.98] transition-all"
       >
         Continuer
@@ -116,16 +116,16 @@ function StepProteins({ value, onChange, onNext, onBack, suggestion }) {
         </p>
       </div>
 
-      <div className="flex items-center gap-3">
+      <div className="relative">
         <input
           type="number"
           inputMode="decimal"
           value={value}
           onChange={e => onChange(e.target.value)}
           placeholder={String(suggestion)}
-          className="flex-1 bg-zinc-50 border border-zinc-200 rounded-2xl px-5 py-4 text-3xl font-medium text-zinc-900 placeholder:text-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-900 focus:bg-white transition-colors"
+          className="w-full bg-zinc-50 border border-zinc-200 rounded-2xl px-5 pr-12 py-4 text-3xl font-medium text-zinc-900 placeholder:text-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-900 focus:bg-white transition-colors"
         />
-        <span className="text-base text-zinc-400 font-medium">g</span>
+        <span className="absolute right-5 top-1/2 -translate-y-1/2 text-base text-zinc-400 font-medium">g</span>
       </div>
 
       <div className="flex gap-3">
@@ -264,6 +264,7 @@ export default function Onboarding({ onComplete }) {
       kcal_rest:        parseFloat(overrides.kcal_rest),
       deficit_target:   parseFloat(overrides.deficit_target),
       protein_target_g: parseFloat(overrides.protein_target_g),
+      goal,
     })
     if (error) {
       setError(`Erreur : ${error}`)
@@ -272,7 +273,7 @@ export default function Onboarding({ onComplete }) {
   }
 
   const steps = [
-    <StepWeight   value={weight}   onChange={setWeight}   onNext={() => setStep(1)} />,
+    <StepWeight   value={weight}   onChange={setWeight}   onNext={() => { if (!weight) setWeight('75'); setStep(1) }} suggestion={75} />,
     <StepGoal     value={goal}     onChange={setGoal}     onNext={() => setStep(2)} onBack={() => setStep(0)} />,
     <StepProteins value={proteins} onChange={setProteins} onNext={handleGoToRecap}  onBack={() => setStep(1)} suggestion={computed?.protein_target_g ?? '—'} />,
     <StepRecap
