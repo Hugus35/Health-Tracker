@@ -12,23 +12,23 @@ const GOALS = [
   { value:  1, label: 'Prise de masse',   Icon: TrendingUp,   color: 'text-red-500'     },
 ]
 
+// ─── Entrées de la page Réglages ─────────────────────────────
+const SETTINGS_ITEMS = [
+  { id: 'profile',   label: 'Profil',        sub: 'Poids, objectif, calories', Icon: User,     color: 'text-blue-500'    },
+  { id: 'foods',     label: 'Mes aliments',  sub: "Base d'aliments perso",     Icon: Apple,    color: 'text-emerald-500' },
+  { id: 'exercises', label: 'Mes exercices', sub: "Catalogue d'exercices",     Icon: Dumbbell, color: 'text-red-500'     },
+]
+
 // ─── Page principale Settings ───────────────────────────────
-// Liste de 3 entrées qui ouvrent chacune une BottomSheet.
 export default function Settings({ settings, updateSettings }) {
   const [openSheet, setOpenSheet] = useState(null) // 'profile' | 'foods' | 'exercises' | null
-
-  const items = [
-    { id: 'profile',   label: 'Profil',         sub: 'Poids, objectif, calories', Icon: User,     color: 'text-blue-500'    },
-    { id: 'foods',     label: 'Mes aliments',   sub: 'Base d\'aliments perso',    Icon: Apple,    color: 'text-emerald-500' },
-    { id: 'exercises', label: 'Mes exercices',  sub: 'Catalogue d\'exercices',    Icon: Dumbbell, color: 'text-red-500'     },
-  ]
 
   return (
     <div className="px-6 py-8 flex flex-col gap-6">
       <h1 className="text-2xl font-semibold tracking-tight text-zinc-900">Réglages</h1>
 
       <div className="flex flex-col gap-2">
-        {items.map(({ id, label, sub, Icon, color }) => (
+        {SETTINGS_ITEMS.map(({ id, label, sub, Icon, color }) => (
           <button
             key={id}
             onClick={() => setOpenSheet(id)}

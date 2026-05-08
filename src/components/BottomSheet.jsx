@@ -5,7 +5,8 @@ import { X } from 'lucide-react'
 // Pattern iOS classique : backdrop semi-transparent + panneau arrondi en haut.
 // Fermeture par tap sur le backdrop ou bouton X.
 // Le contenu est scrollable si trop grand (max-height = 90% de l'écran).
-export default function BottomSheet({ open, onClose, title, children }) {
+// zIndex peut être augmenté pour les BottomSheet imbriqués (défaut : 50)
+export default function BottomSheet({ open, onClose, title, children, zIndex = 50 }) {
   // Empêche le scroll du body quand la sheet est ouverte
   useEffect(() => {
     if (open) {
@@ -15,7 +16,7 @@ export default function BottomSheet({ open, onClose, title, children }) {
   }, [open])
 
   return (
-    <div className={`fixed inset-0 z-50 ${open ? '' : 'pointer-events-none'}`}>
+    <div className={`fixed inset-0 ${open ? '' : 'pointer-events-none'}`} style={{ zIndex }}>
       {/* Backdrop */}
       <div
         onClick={onClose}

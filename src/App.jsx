@@ -3,7 +3,6 @@ import { useSettings } from './hooks/useSettings'
 import Onboarding from './components/Onboarding'
 import BottomNav from './components/BottomNav'
 import Journal from './components/Journal'
-import MealEntry from './components/MealEntry'
 import Reporting from './components/Reporting'
 import Settings from './components/Settings'
 
@@ -23,11 +22,8 @@ export default function App() {
     return <Onboarding onComplete={updateSettings} />
   }
 
-  // Tabs reconstruits à chaque render — settings/updateSettings sont passés
-  // aux composants qui en ont besoin pour rester en phase avec App.
   const tabs = {
-    journal:   <Journal />,
-    meal:      <MealEntry />,
+    journal:   <Journal settings={settings} />,
     reporting: <Reporting />,
     settings:  <Settings settings={settings} updateSettings={updateSettings} />,
   }

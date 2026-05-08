@@ -9,25 +9,26 @@ export function useFoods() {
   const [loading, setLoading] = useState(true)
   const [error,   setError]   = useState(null)
 
-  // Chargement initial — uniquement les aliments non-archivés
-  useEffect(() => {
-    async function load() {
-      try {
-        const { data, error: fetchError } = await supabase
-          .from('foods')
-          .select('*')
-          .eq('is_archived', false)
-          .order('name', { ascending: true })
-        if (fetchError) throw fetchError
-        setFoods(data ?? [])
-      } catch (err) {
-        setError(err.message)
-      } finally {
-        setLoading(false)
-      }
+  // Chargement — extrait pour pouvoir être rappelé (reload)
+  const load = useCallback(async () => {
+    setLoading(true)
+    try {
+      const { data, error: fetchError } = await supabase
+        .from('foods')
+        .select('*')
+        .eq('is_archived', false)
+        .order('name', { ascending: true })
+      if (fetchError) throw fetchError
+      setFoods(data ?? [])
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setLoading(false)
     }
-    load()
   }, [])
+
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => { load() }, [load])
 
   // Création — insert + ajout local
   const addFood = useCallback(async (food) => {
@@ -76,5 +77,5 @@ export function useFoods() {
     }
   }, [])
 
-  return { foods, loading, error, addFood, updateFood, archiveFood }
+  return { foods, loading, error, addFood, updateFood, archiveFood, reload: load }
 }

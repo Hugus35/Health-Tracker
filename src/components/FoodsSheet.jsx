@@ -1,20 +1,25 @@
 import { useState } from 'react'
 import { Plus, ChevronLeft, Trash2 } from 'lucide-react'
 import { useFoods } from '../hooks/useFoods'
+import FoodIcon from './FoodIcon'
+import { UNITS, FOOD_ICONS } from '../lib/constants'
 
 // ─── FoodsSheet — gestion de la base d'aliments ─────────────
 // Deux vues : liste (par défaut) et formulaire (création/édition).
 // Pas de modale imbriquée : on swap le contenu de la BottomSheet parente.
-export default function FoodsSheet() {
+// initialEditing : null (liste) | 'new' (formulaire vide)
+// Passé depuis MealModal pour ouvrir directement le formulaire de création.
+export default function FoodsSheet({ initialEditing = null, initialName = '', onCancel = null }) {
   const { foods, loading, addFood, updateFood, archiveFood } = useFoods()
-  const [editing, setEditing] = useState(null) // null | 'new' | <food object>
+  const [editing, setEditing] = useState(initialEditing) // null | 'new' | <food object>
 
   // Mode formulaire
   if (editing !== null) {
     return (
       <FoodForm
         food={editing === 'new' ? null : editing}
-        onCancel={() => setEditing(null)}
+        initialName={editing === 'new' ? initialName : undefined}
+        onCancel={editing === 'new' && onCancel ? onCancel : () => setEditing(null)}
         onSave={async (data) => {
           const result = editing === 'new'
             ? await addFood(data)
@@ -55,12 +60,15 @@ export default function FoodsSheet() {
             <button
               key={f.id}
               onClick={() => setEditing(f)}
-              className={`flex items-center justify-between py-3 active:bg-zinc-50 transition-colors text-left ${
+              className={`flex items-center gap-3 py-3 active:bg-zinc-50 transition-colors text-left ${
                 i < foods.length - 1 ? 'border-b border-zinc-100' : ''
               }`}
             >
-              <div className="flex flex-col gap-0.5">
-                <span className="text-sm font-medium text-zinc-900">{f.name}</span>
+              <FoodIcon id={f.icon} />
+              <div className="flex flex-col gap-0.5 flex-1 min-w-0">
+                <span className="text-sm font-medium text-zinc-900 truncate">
+                  {f.name}{f.brand ? <span className="font-normal text-zinc-400"> · {f.brand}</span> : null}
+                </span>
                 <span className="text-xs text-zinc-400">
                   {f.kcal} kcal · {f.proteins}g protéines · {f.default_unit}
                 </span>
@@ -76,8 +84,11 @@ export default function FoodsSheet() {
 // ─── Formulaire — création ou édition d'un aliment ──────────
 // Champs minimaux pour le MVP : nom, kcal/100g, macros, unité par défaut.
 // Le scan EAN et OpenFoodFacts viendront dans une itération suivante.
-function FoodForm({ food, onCancel, onSave, onArchive }) {
-  const [name,        setName]        = useState(food?.name ?? '')
+function FoodForm({ food, initialName = '', onCancel, onSave, onArchive }) {
+  const [icon,        setIcon]        = useState(food?.icon ?? null)
+  const [pickerOpen,  setPickerOpen]  = useState(false)
+  const [name,        setName]        = useState(food?.name ?? initialName)
+  const [brand,       setBrand]       = useState(food?.brand ?? '')
   const [kcal,        setKcal]        = useState(String(food?.kcal ?? ''))
   const [proteins,    setProteins]    = useState(String(food?.proteins ?? ''))
   const [carbs,       setCarbs]       = useState(String(food?.carbs ?? ''))
@@ -86,13 +97,16 @@ function FoodForm({ food, onCancel, onSave, onArchive }) {
   const [saving,      setSaving]      = useState(false)
   const [error,       setError]       = useState(null)
 
-  const canSave = name.trim().length > 0 && kcal !== ''
+  const iconEntry = FOOD_ICONS.find(f => f.id === icon) ?? null
+  const canSave   = name.trim().length > 0 && kcal !== ''
 
   const handleSave = async () => {
     setSaving(true)
     setError(null)
     const { error } = await onSave({
+      icon:         icon ?? null,
       name:         name.trim(),
+      brand:        brand.trim() || null,
       kcal:         parseFloat(kcal),
       proteins:     parseFloat(proteins) || 0,
       carbs:        parseFloat(carbs)    || 0,
@@ -105,12 +119,16 @@ function FoodForm({ food, onCancel, onSave, onArchive }) {
     }
   }
 
+  // macroRef dépend de l'unité choisie : texte affiché sous chaque champ macro
+  const isServing = UNITS.find(u => u.id === defaultUnit)?.isServing ?? false
+  const macroRef  = isServing ? `Pour 1 ${defaultUnit}` : defaultUnit === 'ml' ? 'Pour 100ml' : 'Pour 100g'
+
   // Liste des inputs numériques (macros) pour éviter la duplication
   const macroInputs = [
-    { label: 'Calories',  value: kcal,     onChange: setKcal,     unit: 'kcal', help: 'Pour 100g / 100ml' },
-    { label: 'Protéines', value: proteins, onChange: setProteins, unit: 'g'    },
-    { label: 'Glucides',  value: carbs,    onChange: setCarbs,    unit: 'g'    },
-    { label: 'Lipides',   value: fats,     onChange: setFats,     unit: 'g'    },
+    { label: 'Calories',  value: kcal,     onChange: setKcal,     unit: 'kcal', help: macroRef },
+    { label: 'Protéines', value: proteins, onChange: setProteins, unit: 'g',    help: macroRef },
+    { label: 'Glucides',  value: carbs,    onChange: setCarbs,    unit: 'g',    help: macroRef },
+    { label: 'Lipides',   value: fats,     onChange: setFats,     unit: 'g',    help: macroRef },
   ]
 
   return (
@@ -124,18 +142,79 @@ function FoodForm({ food, onCancel, onSave, onArchive }) {
         <span className="text-sm font-medium">Retour</span>
       </button>
 
-      {/* Nom */}
+      {/* Nom + bouton icône */}
       <div>
         <label className="text-xs font-semibold text-zinc-400 uppercase tracking-widest mb-2 block">
           Nom
         </label>
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={name}
+            onChange={e => setName(e.target.value)}
+            placeholder="Pain de mie complet"
+            className="flex-1 bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 text-base font-medium text-zinc-900 placeholder:text-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-900 focus:bg-white transition-colors"
+          />
+          {/* Déclencheur du picker — affiche l'icône courante ou un placeholder */}
+          <button
+            onClick={() => setPickerOpen(o => !o)}
+            className={`w-12 shrink-0 flex items-center justify-center rounded-xl border transition-colors ${
+              pickerOpen
+                ? 'bg-zinc-900 border-zinc-900 text-white'
+                : 'bg-zinc-50 border-zinc-200 active:bg-zinc-100'
+            }`}
+          >
+            {iconEntry
+              ? <iconEntry.Icon size={18} strokeWidth={1.75} className={pickerOpen ? 'text-white' : iconEntry.color} />
+              : <span className="text-xs font-medium text-zinc-400">+</span>
+            }
+          </button>
+        </div>
+
+        {/* Picker — visible au clic sur le bouton */}
+        {pickerOpen && (
+          <div className="flex flex-wrap gap-1.5 mt-3 p-3 bg-zinc-50 border border-zinc-200 rounded-2xl">
+            {FOOD_ICONS.map(({ id, Icon, color }) => (
+              <button
+                key={id}
+                onClick={() => { setIcon(icon === id ? null : id); setPickerOpen(false) }}
+                className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${
+                  icon === id ? 'bg-zinc-900' : 'bg-white active:bg-zinc-100'
+                }`}
+              >
+                <Icon size={18} strokeWidth={1.75} className={icon === id ? 'text-white' : color} />
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Marque */}
+      <div>
+        <label className="text-xs font-semibold text-zinc-400 uppercase tracking-widest mb-2 block">
+          Marque <span className="normal-case font-normal">(optionnel)</span>
+        </label>
         <input
           type="text"
-          value={name}
-          onChange={e => setName(e.target.value)}
-          placeholder="Pain de mie complet"
+          value={brand}
+          onChange={e => setBrand(e.target.value)}
+          placeholder="Bjorg, Danone…"
           className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 text-base font-medium text-zinc-900 placeholder:text-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-900 focus:bg-white transition-colors"
         />
+      </div>
+
+      {/* Unité par défaut — avant les macros : conditionne le texte de référence */}
+      <div>
+        <label className="text-xs font-semibold text-zinc-400 uppercase tracking-widest mb-2 block">
+          Unité par défaut
+        </label>
+        <select
+          value={defaultUnit}
+          onChange={e => setDefaultUnit(e.target.value)}
+          className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 text-base font-medium text-zinc-900 focus:outline-none focus:ring-2 focus:ring-zinc-900 focus:bg-white transition-colors appearance-none"
+        >
+          {UNITS.map(u => <option key={u.id} value={u.id}>{u.label}</option>)}
+        </select>
       </div>
 
       {/* Macros */}
@@ -157,24 +236,6 @@ function FoodForm({ food, onCancel, onSave, onArchive }) {
           {help && <p className="text-xs text-zinc-400 mt-1.5">{help}</p>}
         </div>
       ))}
-
-      {/* Unité par défaut */}
-      <div>
-        <label className="text-xs font-semibold text-zinc-400 uppercase tracking-widest mb-2 block">
-          Unité par défaut
-        </label>
-        <select
-          value={defaultUnit}
-          onChange={e => setDefaultUnit(e.target.value)}
-          className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 text-base font-medium text-zinc-900 focus:outline-none focus:ring-2 focus:ring-zinc-900 focus:bg-white transition-colors appearance-none"
-        >
-          <option value="g">Grammes (g)</option>
-          <option value="ml">Millilitres (ml)</option>
-          <option value="unité">Unité</option>
-          <option value="tranche">Tranche</option>
-          <option value="cuillère">Cuillère</option>
-        </select>
-      </div>
 
       {error && <p className="text-sm text-red-500">{error}</p>}
 
