@@ -3,6 +3,7 @@ import { Search, X, Plus } from 'lucide-react'
 import BottomSheet from './BottomSheet'
 import FoodsSheet from './FoodsSheet'
 import FoodIcon from './FoodIcon'
+import { useFoods } from '../hooks/useFoods'
 import { MEAL_TYPES, UNITS } from '../lib/constants'
 
 // ─── MealModal ────────────────────────────────────────────────
@@ -14,24 +15,21 @@ export default function MealModal({
   mealType   = null,   // type du repas existant (pour le titre)
   existingMealTypes = [],
   addMeal, addMealItem,
-  foods, reloadFoods,
 }) {
   const isNew = mealId === null
 
   const [step,          setStep]          = useState(isNew ? 'type' : 'foods')
   const [selectedType,  setSelectedType]  = useState(mealType)
   const [currentMealId, setCurrentMealId] = useState(mealId)
-  const [addedItems,    setAddedItems]    = useState([])
 
   const handleClose = () => {
     setStep(isNew ? 'type' : 'foods')
     setSelectedType(isNew ? null : mealType)
     setCurrentMealId(mealId)
-    setAddedItems([])
     onClose()
   }
 
-  // Crée le repas en DB au premier ajout si nécessaire
+  // Crée le repas en DB au premier ajout si nécessaire, puis ferme
   const handleAddItem = async (food, quantity, unit) => {
     let id = currentMealId
     if (!id) {
@@ -41,9 +39,7 @@ export default function MealModal({
       setCurrentMealId(id)
     }
     const result = await addMealItem(id, food, quantity, unit)
-    if (!result.error) {
-      setAddedItems(prev => [...prev, { id: result.data.id, food, quantity, unit }])
-    }
+    if (!result.error) handleClose()
     return result
   }
 
@@ -59,12 +55,8 @@ export default function MealModal({
         />
       ) : (
         <FoodsStep
-          foods={foods}
-          reloadFoods={reloadFoods}
-          addedItems={addedItems}
           onAddItem={handleAddItem}
           onBack={isNew ? () => { setStep('type'); setSelectedType(null) } : null}
-          onDone={handleClose}
         />
       )}
     </BottomSheet>
@@ -105,8 +97,9 @@ function TypeStep({ existingMealTypes, onSelect }) {
 }
 
 // ─── FoodsStep ────────────────────────────────────────────────
-// Recherche + ajout d'aliments. addedItems = items ajoutés dans cette session.
-function FoodsStep({ foods, reloadFoods, addedItems, onAddItem, onBack, onDone }) {
+// Recherche + sélection d'un aliment. L'ajout ferme automatiquement le modal.
+function FoodsStep({ onAddItem, onBack }) {
+  const { foods, reload: reloadFoods } = useFoods()
   const [query,        setQuery]        = useState('')
   const [selectedFood, setSelectedFood] = useState(null)
   const [quantity,     setQuantity]     = useState('')
@@ -137,31 +130,13 @@ function FoodsStep({ foods, reloadFoods, addedItems, onAddItem, onBack, onDone }
     if (!selectedFood || !quantity) return
     setSaving(true)
     const result = await onAddItem(selectedFood, parseFloat(quantity), unit)
-    if (result.error) { setError(result.error) }
-    else { setSelectedFood(null); setQuery('') }
+    if (result.error) setError(result.error)
     setSaving(false)
   }
 
   return (
     <>
       <div className="flex flex-col gap-4">
-
-        {/* Items ajoutés dans cette session */}
-        {addedItems.length > 0 && (
-          <div className="bg-zinc-50 rounded-2xl border border-zinc-100 overflow-hidden">
-            {addedItems.map((item, i) => (
-              <div
-                key={item.id}
-                className={`flex items-center justify-between px-4 py-3 ${
-                  i < addedItems.length - 1 ? 'border-b border-zinc-100' : ''
-                }`}
-              >
-                <span className="text-sm font-medium text-zinc-900 truncate flex-1">{item.food.name}</span>
-                <span className="text-xs text-zinc-400 ml-3 shrink-0">{item.quantity} {item.unit}</span>
-              </div>
-            ))}
-          </div>
-        )}
 
         {/* Formulaire quantité */}
         {selectedFood ? (
@@ -274,17 +249,12 @@ function FoodsStep({ foods, reloadFoods, addedItems, onAddItem, onBack, onDone }
           </div>
         )}
 
-        {/* Boutons bas */}
-        <div className="flex gap-3 pt-2">
-          {onBack && (
-            <button onClick={onBack} className="flex-1 border border-zinc-200 rounded-2xl py-3.5 text-sm text-zinc-500 font-medium active:bg-zinc-50 transition-colors">
-              Retour
-            </button>
-          )}
-          <button onClick={onDone} className="flex-1 bg-zinc-900 text-white rounded-2xl py-3.5 text-sm font-medium active:scale-[0.98] transition-all">
-            {addedItems.length > 0 ? 'Valider' : 'Fermer'}
+        {/* Bouton retour — uniquement pour un nouveau repas */}
+        {onBack && (
+          <button onClick={onBack} className="w-full border border-zinc-200 rounded-2xl py-3.5 text-sm text-zinc-500 font-medium active:bg-zinc-50 transition-colors">
+            Retour
           </button>
-        </div>
+        )}
       </div>
 
       <BottomSheet open={creatingFood} onClose={closeCreating} title="Nouvel aliment" zIndex={60}>
@@ -293,6 +263,7 @@ function FoodsStep({ foods, reloadFoods, addedItems, onAddItem, onBack, onDone }
           initialEditing="new"
           initialName={query}
           onCancel={closeCreating}
+          onSaved={(food) => { closeCreating(); handleFoodTap(food) }}
         />
       </BottomSheet>
     </>

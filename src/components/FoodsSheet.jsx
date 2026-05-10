@@ -1,46 +1,53 @@
+import { ChevronLeft, Plus, Trash2 } from 'lucide-react'
 import { useState } from 'react'
-import { Plus, ChevronLeft, Trash2 } from 'lucide-react'
 import { useFoods } from '../hooks/useFoods'
+import { FOOD_ICONS, UNITS } from '../lib/constants'
 import FoodIcon from './FoodIcon'
-import { UNITS, FOOD_ICONS } from '../lib/constants'
 
 // ─── FoodsSheet — gestion de la base d'aliments ─────────────
-// Deux vues : liste (par défaut) et formulaire (création/édition).
-// Pas de modale imbriquée : on swap le contenu de la BottomSheet parente.
-// initialEditing : null (liste) | 'new' (formulaire vide)
-// Passé depuis MealModal pour ouvrir directement le formulaire de création.
-export default function FoodsSheet({ initialEditing = null, initialName = '', onCancel = null }) {
+// Deux vues : 'list' (par défaut) et 'form' (création/édition).
+// initialEditing : null → liste, 'new' → formulaire vide directement
+// onCancel : callback de fermeture passé depuis MealModal
+export default function FoodsSheet({ initialEditing = null, initialName = '', onCancel = null, onSaved = null }) {
   const { foods, loading, addFood, updateFood, archiveFood } = useFoods()
-  const [editing, setEditing] = useState(initialEditing) // null | 'new' | <food object>
+  const [view,        setView]        = useState(initialEditing === 'new' ? 'form' : 'list')
+  const [editingFood, setEditingFood] = useState(null) // null = création, <food object> = édition
 
-  // Mode formulaire
-  if (editing !== null) {
+  const openCreate = () => { setEditingFood(null); setView('form') }
+  const openEdit   = (food) => { setEditingFood(food); setView('form') }
+  const backToList = () => { setEditingFood(null); setView('list') }
+
+  // En mode form depuis MealModal (initialEditing='new'), "Retour" ferme le BottomSheet
+  const handleCancel = view === 'form' && editingFood === null && onCancel ? onCancel : backToList
+
+  if (view === 'form') {
     return (
       <FoodForm
-        food={editing === 'new' ? null : editing}
-        initialName={editing === 'new' ? initialName : undefined}
-        onCancel={editing === 'new' && onCancel ? onCancel : () => setEditing(null)}
+        food={editingFood}
+        initialName={editingFood ? undefined : initialName}
+        onCancel={handleCancel}
         onSave={async (data) => {
-          const result = editing === 'new'
-            ? await addFood(data)
-            : await updateFood(editing.id, data)
-          if (!result.error) setEditing(null)
+          const result = editingFood
+            ? await updateFood(editingFood.id, data)
+            : await addFood(data)
+          if (!result.error) {
+            onSaved && !editingFood ? onSaved(result.data) : backToList()
+          }
           return result
         }}
-        onArchive={editing === 'new' ? null : async () => {
-          const result = await archiveFood(editing.id)
-          if (!result.error) setEditing(null)
+        onArchive={editingFood ? async () => {
+          const result = await archiveFood(editingFood.id)
+          if (!result.error) backToList()
           return result
-        }}
+        } : null}
       />
     )
   }
 
-  // Mode liste
   return (
     <div className="flex flex-col gap-4">
       <button
-        onClick={() => setEditing('new')}
+        onClick={openCreate}
         className="flex items-center justify-center gap-2 bg-zinc-900 text-white rounded-2xl py-3 text-sm font-medium active:scale-[0.98] transition-all"
       >
         <Plus size={16} strokeWidth={2.5} />
@@ -59,7 +66,7 @@ export default function FoodsSheet({ initialEditing = null, initialName = '', on
           {foods.map((f, i) => (
             <button
               key={f.id}
-              onClick={() => setEditing(f)}
+              onClick={() => openEdit(f)}
               className={`flex items-center gap-3 py-3 active:bg-zinc-50 transition-colors text-left ${
                 i < foods.length - 1 ? 'border-b border-zinc-100' : ''
               }`}
@@ -82,8 +89,6 @@ export default function FoodsSheet({ initialEditing = null, initialName = '', on
 }
 
 // ─── Formulaire — création ou édition d'un aliment ──────────
-// Champs minimaux pour le MVP : nom, kcal/100g, macros, unité par défaut.
-// Le scan EAN et OpenFoodFacts viendront dans une itération suivante.
 function FoodForm({ food, initialName = '', onCancel, onSave, onArchive }) {
   const [icon,        setIcon]        = useState(food?.icon ?? null)
   const [pickerOpen,  setPickerOpen]  = useState(false)
@@ -98,7 +103,7 @@ function FoodForm({ food, initialName = '', onCancel, onSave, onArchive }) {
   const [error,       setError]       = useState(null)
 
   const iconEntry = FOOD_ICONS.find(f => f.id === icon) ?? null
-  const canSave   = name.trim().length > 0 && kcal !== ''
+  const canSave   = name.trim().length > 0 && kcal !== '' && proteins !== '' && carbs !== '' && fats !== ''
 
   const handleSave = async () => {
     setSaving(true)
@@ -119,11 +124,9 @@ function FoodForm({ food, initialName = '', onCancel, onSave, onArchive }) {
     }
   }
 
-  // macroRef dépend de l'unité choisie : texte affiché sous chaque champ macro
   const isServing = UNITS.find(u => u.id === defaultUnit)?.isServing ?? false
   const macroRef  = isServing ? `Pour 1 ${defaultUnit}` : defaultUnit === 'ml' ? 'Pour 100ml' : 'Pour 100g'
 
-  // Liste des inputs numériques (macros) pour éviter la duplication
   const macroInputs = [
     { label: 'Calories',  value: kcal,     onChange: setKcal,     unit: 'kcal', help: macroRef },
     { label: 'Protéines', value: proteins, onChange: setProteins, unit: 'g',    help: macroRef },
@@ -133,7 +136,6 @@ function FoodForm({ food, initialName = '', onCancel, onSave, onArchive }) {
 
   return (
     <div className="flex flex-col gap-5">
-      {/* Header — retour vers la liste */}
       <button
         onClick={onCancel}
         className="flex items-center gap-1 -ml-1 text-zinc-500 active:text-zinc-700 transition-colors w-fit"
@@ -155,7 +157,6 @@ function FoodForm({ food, initialName = '', onCancel, onSave, onArchive }) {
             placeholder="Pain de mie complet"
             className="flex-1 bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 text-base font-medium text-zinc-900 placeholder:text-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-900 focus:bg-white transition-colors"
           />
-          {/* Déclencheur du picker — affiche l'icône courante ou un placeholder */}
           <button
             onClick={() => setPickerOpen(o => !o)}
             className={`w-12 shrink-0 flex items-center justify-center rounded-xl border transition-colors ${
@@ -171,7 +172,6 @@ function FoodForm({ food, initialName = '', onCancel, onSave, onArchive }) {
           </button>
         </div>
 
-        {/* Picker — visible au clic sur le bouton */}
         {pickerOpen && (
           <div className="flex flex-wrap gap-1.5 mt-3 p-3 bg-zinc-50 border border-zinc-200 rounded-2xl">
             {FOOD_ICONS.map(({ id, Icon, color }) => (
@@ -203,7 +203,7 @@ function FoodForm({ food, initialName = '', onCancel, onSave, onArchive }) {
         />
       </div>
 
-      {/* Unité par défaut — avant les macros : conditionne le texte de référence */}
+      {/* Unité par défaut */}
       <div>
         <label className="text-xs font-semibold text-zinc-400 uppercase tracking-widest mb-2 block">
           Unité par défaut
@@ -239,7 +239,6 @@ function FoodForm({ food, initialName = '', onCancel, onSave, onArchive }) {
 
       {error && <p className="text-sm text-red-500">{error}</p>}
 
-      {/* Boutons */}
       <div className="flex gap-3 pt-2">
         {onArchive ? (
           <button

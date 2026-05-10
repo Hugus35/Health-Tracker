@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { Plus, Trash2, Pencil, Check, X, ChevronLeft, ChevronRight } from 'lucide-react'
 import { useMeals, calcItemMacros, sumMacros } from '../hooks/useMeals'
-import { useFoods } from '../hooks/useFoods'
 import MealModal from './MealModal'
 import FoodIcon from './FoodIcon'
 import { MEAL_TYPES, UNITS, MACRO_BARS } from '../lib/constants'
@@ -15,8 +14,6 @@ export default function Journal({ settings }) {
   const [date, setDate] = useState(todayISO)
 
   const { meals, loading, addMeal, addMealItem, updateMealItem, removeMealItem, deleteMeal } = useMeals(date)
-  // useFoods remonté ici pour être chargé avant l'ouverture du modal
-  const { foods, reload: reloadFoods } = useFoods()
 
   // null = fermé | 'new' = nouveau repas | { id, mealType } = ajout sur repas existant
   const [mealModal, setMealModal] = useState(null)
@@ -135,8 +132,6 @@ export default function Journal({ settings }) {
         existingMealTypes={meals.map(m => m.meal_type)}
         addMeal={addMeal}
         addMealItem={addMealItem}
-        foods={foods}
-        reloadFoods={reloadFoods}
       />
     </div>
   )
@@ -183,7 +178,7 @@ function MealCard({ meal, onAddFood, onUpdateItem, onRemoveItem, onDeleteMeal })
           <span className="text-sm font-semibold text-zinc-700">{label}</span>
         </div>
         <div className="flex items-center gap-3">
-          <span className="text-xs font-medium text-zinc-400 tabular-nums">
+          <span className="text-sm font-semibold text-zinc-600 tabular-nums">
             {Math.round(totals.kcal)} kcal
           </span>
           <button
@@ -286,8 +281,8 @@ function MealItemRow({ item, isLast, onUpdate, onRemove }) {
         {/* Nom + kcal */}
         <div className="flex items-center justify-between gap-2">
           <FoodIcon id={item.foods.icon} size={15} />
-          <span className="text-sm font-medium text-zinc-900 truncate">{item.foods.name}</span>
-          <span className="text-sm font-semibold text-zinc-700 tabular-nums shrink-0">
+          <span className="text-sm font-medium text-zinc-900 truncate flex-1">{item.foods.name}</span>
+          <span className="text-xs font-medium text-zinc-400 tabular-nums shrink-0">
             {Math.round(macros.kcal)} kcal
           </span>
         </div>
