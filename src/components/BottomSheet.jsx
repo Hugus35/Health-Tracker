@@ -1,12 +1,25 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { X } from 'lucide-react'
 
 // ─── BottomSheet — modale qui glisse depuis le bas ──────────
 // Pattern iOS classique : backdrop semi-transparent + panneau arrondi en haut.
 // Fermeture par tap sur le backdrop ou bouton X.
 // Le contenu est scrollable si trop grand (max-height = 90% de l'écran).
-// zIndex peut être augmenté pour les BottomSheet imbriqués (défaut : 50)
+// zIndex peut être augmenté pour les BottomSheet imbriqués (défaut : 50).
+// Les enfants sont démontés après l'animation de fermeture (300ms) — l'état
+// interne est réinitialisé à chaque réouverture.
 export default function BottomSheet({ open, onClose, title, children, zIndex = 50 }) {
+  const [mounted, setMounted] = useState(false)
+
+  useEffect(() => {
+    if (open) {
+      setMounted(true)
+    } else {
+      const t = setTimeout(() => setMounted(false), 300)
+      return () => clearTimeout(t)
+    }
+  }, [open])
+
   // Empêche le scroll du body quand la sheet est ouverte
   useEffect(() => {
     if (open) {
@@ -49,7 +62,7 @@ export default function BottomSheet({ open, onClose, title, children, zIndex = 5
 
           {/* Content scrollable */}
           <div className="px-5 pb-8 overflow-y-auto">
-            {children}
+            {mounted && children}
           </div>
         </div>
       </div>

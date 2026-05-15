@@ -1,9 +1,35 @@
 import {
-  Apple, Coffee, Moon, Utensils,
-  Beef, Beer, Cake, Carrot, Cherry, Cookie, CupSoda, Drumstick,
-  Egg, Fish, GlassWater, Grape, IceCream, Leaf, Milk, Nut,
-  Pizza, Salad, Sandwich, Soup, UtensilsCrossed, Wheat, Wine, Croissant,
+  Apple,
+  Beef, Beer, Cake, Carrot, Cherry,
+  CircleDot,
+  Coffee,
+  Cookie,
+  Croissant,
+  CupSoda, Drumstick,
+  Dumbbell,
+  Egg, Fish,
+  Footprints,
+  GlassWater, Grape, IceCream, Leaf, Milk,
+  Minus,
+  Moon,
+  Nut,
+  Pizza, Salad, Sandwich, Soup,
+  TrendingDown, TrendingUp,
+  Utensils,
+  UtensilsCrossed,
+  Volleyball,
+  Waves,
+  Wheat, Wine,
+  Zap
 } from 'lucide-react'
+
+// ─── Objectifs calorifiques ───────────────────────────────────────────
+// Source unique partagée entre Onboarding et Settings.
+export const GOALS = [
+  { value: -1, label: 'Perdre du poids', Icon: TrendingDown, color: 'text-emerald-500' },
+  { value:  0, label: 'Maintien',         Icon: Minus,        color: 'text-zinc-400'    },
+  { value:  1, label: 'Prise de masse',   Icon: TrendingUp,   color: 'text-red-500'     },
+]
 
 // ─── Types de repas ───────────────────────────────────────────
 // Source unique partagée entre MealModal et Journal.
@@ -60,6 +86,50 @@ export const FOOD_ICONS = [
 // Retourne l'entrée complète { id, Icon, color } depuis le nom stocké en DB
 export function getFoodIcon(id) {
   return id ? (FOOD_ICONS.find(f => f.id === id) ?? null) : null
+}
+
+// ─── Icônes sports ────────────────────────────────────────────
+// Liste des icônes disponibles dans le picker de SportsSheet.
+// L'id (string) est stocké dans sport_types.icon en DB.
+// getSportIcon(id) retourne { id, Icon, color } ou null.
+export const SPORT_ICONS = [
+  { id: 'Dumbbell',   Icon: Dumbbell,   color: 'text-blue-500'    },
+  { id: 'Zap',        Icon: Zap,        color: 'text-amber-500'   },
+  { id: 'Waves',      Icon: Waves,      color: 'text-sky-400'     },
+  { id: 'Footprints', Icon: Footprints, color: 'text-emerald-500' },
+  { id: 'CircleDot',  Icon: CircleDot,  color: 'text-orange-500'  },
+  { id: 'Volleyball', Icon: Volleyball, color: 'text-yellow-500'  },
+]
+
+export function getSportIcon(id) {
+  return id ? (SPORT_ICONS.find(s => s.id === id) ?? null) : null
+}
+
+// ─── Presets MET ──────────────────────────────────────────────
+// Valeurs suggérées lors de la création d'un sport.
+// L'user peut ensuite saisir une valeur libre.
+export const MET_PRESETS = [
+  { label: 'Léger',   value: 3.5 },
+  { label: 'Modéré',  value: 6.0 },
+  { label: 'Intense', value: 9.0 },
+]
+
+// ─── Fourchettes macros par objectif ─────────────────────────
+// Chaque objectif définit des bornes min/max et une valeur par défaut (en %).
+// Utilisé dans l'onboarding et les settings pour guider + contraindre la saisie.
+export const MACRO_RANGES = {
+  '-1': { // Perte de poids — protéines hautes, glucides modérés
+    pct_protein: { min: 35, max: 45, default: 40 },
+    pct_carbs:   { min: 30, max: 40, default: 35 },
+  },
+  '0': { // Maintien — répartition équilibrée
+    pct_protein: { min: 25, max: 40, default: 30 },
+    pct_carbs:   { min: 40, max: 55, default: 45 },
+  },
+  '1': { // Prise de masse — glucides élevés pour l'énergie
+    pct_protein: { min: 30, max: 40, default: 35 },
+    pct_carbs:   { min: 40, max: 50, default: 45 },
+  },
 }
 
 export const MACRO_BARS = [

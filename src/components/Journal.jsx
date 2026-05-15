@@ -1,9 +1,12 @@
+import { Check, ChevronLeft, ChevronRight, Pencil, Plus, Trash2, X } from 'lucide-react'
 import { useState } from 'react'
-import { Plus, Trash2, Pencil, Check, X, ChevronLeft, ChevronRight } from 'lucide-react'
-import { useMeals, calcItemMacros, sumMacros } from '../hooks/useMeals'
-import MealModal from './MealModal'
+import { calcItemMacros, sumMacros, useMeals } from '../hooks/useMeals'
+import { calcSessionKcal, useWorkouts } from '../hooks/useWorkouts'
+import { MACRO_BARS, MEAL_TYPES, UNITS } from '../lib/constants'
 import FoodIcon from './FoodIcon'
-import { MEAL_TYPES, UNITS, MACRO_BARS } from '../lib/constants'
+import MealModal from './MealModal'
+import SportIcon from './SportIcon'
+import WorkoutModal from './WorkoutModal'
 
 function todayISO() {
   return new Date().toISOString().slice(0, 10)
@@ -12,20 +15,30 @@ function todayISO() {
 // ─── Journal — tableau de bord du jour ───────────────────────
 export default function Journal({ settings }) {
   const [date, setDate] = useState(todayISO)
+  const [tab,  setTab]  = useState('meals') // 'meals' | 'sport'
 
-  const { meals, loading, addMeal, addMealItem, updateMealItem, removeMealItem, deleteMeal } = useMeals(date)
+  const { meals, loading: loadingMeals, addMeal, addMealItem, updateMealItem, removeMealItem, deleteMeal } = useMeals(date)
+  const { sessions, loading: loadingSport, addSession, deleteSession } = useWorkouts(date)
 
-  // null = fermé | 'new' = nouveau repas | { id, mealType } = ajout sur repas existant
-  const [mealModal, setMealModal] = useState(null)
+  const [mealModal,    setMealModal]    = useState(null)
+  const [workoutModal, setWorkoutModal] = useState(false)
 
   const isToday   = date === todayISO()
   const goBack    = () => setDate(d => { const dt = new Date(d + 'T12:00:00'); dt.setDate(dt.getDate() - 1); return dt.toISOString().slice(0, 10) })
   const goForward = () => setDate(d => { const dt = new Date(d + 'T12:00:00'); dt.setDate(dt.getDate() + 1); return dt.toISOString().slice(0, 10) })
 
-  const allItems  = meals.flatMap(m => m.meal_items)
-  const totals    = sumMacros(allItems)
-  const target    = (settings?.kcal_rest ?? 2000) + (settings?.deficit_target ?? 0)
-  const pct       = target > 0 ? Math.min(totals.kcal / target, 1) : 0
+  const allItems    = meals.flatMap(m => m.meal_items)
+  const totals      = sumMacros(allItems)
+  const kcalSport   = sessions.reduce((sum, s) => sum + calcSessionKcal(s, settings?.weight_kg ?? 0), 0)
+  const target      = (settings?.kcal_rest ?? 2000) + Math.round(kcalSport) + (settings?.deficit_target ?? 0)
+  const pct         = target > 0 ? Math.min(totals.kcal / target, 1) : 0
+
+  const pctProtein      = settings?.pct_protein ?? 0.30
+  const pctCarbs        = settings?.pct_carbs   ?? 0.45
+  const pctFats         = 1 - pctProtein - pctCarbs
+  const proteinTarget   = Math.round((target * pctProtein) / 4)
+  const carbsTarget     = Math.round((target * pctCarbs)   / 4)
+  const fatsTarget      = Math.round((target * pctFats)    / 9)
 
   const barColor =
     totals.kcal > target * 1.1 ? 'bg-red-500'
@@ -54,7 +67,6 @@ export default function Journal({ settings }) {
 
       {/* Bilan calorique */}
       <div className="bg-zinc-50 rounded-2xl p-5 flex flex-col gap-4 border border-zinc-100">
-        {/* Chiffres */}
         <div className="flex items-end justify-between">
           <div className="flex items-baseline gap-1.5">
             <span className="text-3xl font-semibold text-zinc-900 tabular-nums">
@@ -67,7 +79,6 @@ export default function Journal({ settings }) {
           </span>
         </div>
 
-        {/* Barre */}
         <div className="h-2 bg-zinc-200 rounded-full overflow-hidden">
           <div
             className={`h-full rounded-full transition-all duration-500 ${barColor}`}
@@ -75,54 +86,108 @@ export default function Journal({ settings }) {
           />
         </div>
 
-        {/* Macros */}
         <div className="flex gap-0 divide-x divide-zinc-200">
-          <MacroCell
-            label="Protéines"
-            value={Math.round(totals.proteins)}
-            unit="g"
-            target={settings?.protein_target_g}
-          />
-          <MacroCell label="Glucides" value={Math.round(totals.carbs)} unit="g" />
-          <MacroCell label="Lipides"  value={Math.round(totals.fats)}  unit="g" />
+          <MacroCell label="Protéines" value={Math.round(totals.proteins)} unit="g" target={proteinTarget} />
+          <MacroCell label="Glucides"  value={Math.round(totals.carbs)}    unit="g" target={carbsTarget}   />
+          <MacroCell label="Lipides"   value={Math.round(totals.fats)}     unit="g" target={fatsTarget}    />
         </div>
       </div>
 
-      {/* Liste des repas */}
-      {loading ? (
-        <div className="flex justify-center py-8">
-          <div className="w-5 h-5 border-2 border-zinc-200 border-t-zinc-600 rounded-full animate-spin" />
-        </div>
-      ) : meals.length === 0 ? (
-        <div className="flex flex-col items-center gap-1.5 py-8 text-center">
-          <p className="text-sm font-medium text-zinc-500">Aucun repas enregistré</p>
-          <p className="text-xs text-zinc-400">Commence par ajouter ton premier repas.</p>
-        </div>
+      {/* Bandeau Repas / Sport */}
+      <div className="flex bg-zinc-100 rounded-xl p-1 gap-1">
+        {[{ id: 'meals', label: 'Repas' }, { id: 'sport', label: 'Sport' }].map(({ id, label }) => (
+          <button
+            key={id}
+            onClick={() => setTab(id)}
+            className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${
+              tab === id ? 'bg-white text-zinc-900 shadow-sm' : 'text-zinc-500'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {/* Contenu selon l'onglet actif */}
+      {tab === 'meals' ? (
+        <>
+          {loadingMeals ? (
+            <div className="flex justify-center py-8">
+              <div className="w-5 h-5 border-2 border-zinc-200 border-t-zinc-600 rounded-full animate-spin" />
+            </div>
+          ) : meals.length === 0 ? (
+            <div className="flex flex-col items-center gap-1.5 py-8 text-center">
+              <p className="text-sm font-medium text-zinc-500">Aucun repas enregistré</p>
+              <p className="text-xs text-zinc-400">Commence par ajouter ton premier repas.</p>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-5">
+              {meals.map(meal => (
+                <MealCard
+                  key={meal.id}
+                  meal={meal}
+                  onAddFood={() => setMealModal({ id: meal.id, mealType: meal.meal_type })}
+                  onUpdateItem={updateMealItem}
+                  onRemoveItem={removeMealItem}
+                  onDeleteMeal={() => deleteMeal(meal.id)}
+                />
+              ))}
+            </div>
+          )}
+
+          <button
+            onClick={() => setMealModal('new')}
+            className="flex items-center justify-center gap-2 bg-zinc-900 text-white rounded-2xl py-3.5 text-sm font-medium active:scale-[0.98] transition-all"
+          >
+            <Plus size={16} strokeWidth={2.5} />
+            Ajouter un repas
+          </button>
+        </>
       ) : (
-        <div className="flex flex-col gap-5">
-          {meals.map(meal => (
-            <MealCard
-              key={meal.id}
-              meal={meal}
-              onAddFood={() => setMealModal({ id: meal.id, mealType: meal.meal_type })}
-              onUpdateItem={updateMealItem}
-              onRemoveItem={removeMealItem}
-              onDeleteMeal={() => deleteMeal(meal.id)}
-            />
-          ))}
-        </div>
+        <>
+          {/* Bilan sport */}
+          <div className="bg-zinc-50 rounded-2xl p-5 border border-zinc-100">
+            <div className="flex items-baseline gap-1.5">
+              <span className="text-3xl font-semibold text-zinc-900 tabular-nums">
+                {Math.round(kcalSport)}
+              </span>
+              <span className="text-sm text-zinc-400">kcal brûlées</span>
+            </div>
+          </div>
+
+          {loadingSport ? (
+            <div className="flex justify-center py-8">
+              <div className="w-5 h-5 border-2 border-zinc-200 border-t-zinc-600 rounded-full animate-spin" />
+            </div>
+          ) : sessions.length === 0 ? (
+            <div className="flex flex-col items-center gap-1.5 py-8 text-center">
+              <p className="text-sm font-medium text-zinc-500">Aucune séance enregistrée</p>
+              <p className="text-xs text-zinc-400">Commence par ajouter ta première séance.</p>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-3">
+              {sessions.map(session => (
+                <WorkoutCard
+                  key={session.id}
+                  session={session}
+                  weightKg={settings?.weight_kg ?? 0}
+                  onDelete={() => deleteSession(session.id)}
+                />
+              ))}
+            </div>
+          )}
+
+          <button
+            onClick={() => setWorkoutModal(true)}
+            className="flex items-center justify-center gap-2 bg-zinc-900 text-white rounded-2xl py-3.5 text-sm font-medium active:scale-[0.98] transition-all"
+          >
+            <Plus size={16} strokeWidth={2.5} />
+            Ajouter une séance
+          </button>
+        </>
       )}
 
-      {/* Bouton + Repas */}
-      <button
-        onClick={() => setMealModal('new')}
-        className="flex items-center justify-center gap-2 bg-zinc-900 text-white rounded-2xl py-3.5 text-sm font-medium active:scale-[0.98] transition-all"
-      >
-        <Plus size={16} strokeWidth={2.5} />
-        Ajouter un repas
-      </button>
-
-      {/* Modal repas — key forcé pour réinitialiser le state interne à chaque ouverture */}
+      {/* Modals */}
       <MealModal
         key={mealModal === 'new' ? 'new' : mealModal?.id ?? 'closed'}
         open={mealModal !== null}
@@ -133,6 +198,31 @@ export default function Journal({ settings }) {
         addMeal={addMeal}
         addMealItem={addMealItem}
       />
+      <WorkoutModal
+        open={workoutModal}
+        onClose={() => setWorkoutModal(false)}
+        onAdd={addSession}
+      />
+    </div>
+  )
+}
+
+// ─── Carte d'une séance ───────────────────────────────────────
+function WorkoutCard({ session, weightKg, onDelete }) {
+  const kcal = Math.round(calcSessionKcal(session, weightKg))
+
+  return (
+    <div className="flex items-center justify-between bg-zinc-50 rounded-2xl border border-zinc-100 px-4 py-3.5">
+      <div className="flex items-center gap-3">
+        <SportIcon id={session.sport_types.icon} />
+        <div className="flex flex-col gap-0.5">
+          <span className="text-sm font-semibold text-zinc-900">{session.sport_types.name}</span>
+          <span className="text-xs text-zinc-400">{session.duration_min} min · {kcal} kcal brûlées</span>
+        </div>
+      </div>
+      <button onClick={onDelete} className="text-zinc-300 active:text-red-400 transition-colors">
+        <Trash2 size={14} strokeWidth={1.75} />
+      </button>
     </div>
   )
 }
@@ -146,9 +236,9 @@ function MacroCell({ label, value, unit, target }) {
   return (
     <div className="flex flex-col gap-0.5 flex-1 px-3 first:pl-0 last:pr-0">
       <span className={`text-sm font-semibold tabular-nums ${valueColor}`}>
-        {value}{unit}
+        {value}
         {target && (
-          <span className="text-zinc-400 font-normal text-xs ml-0.5">/{target}</span>
+          <span className="text-zinc-400 font-normal text-xs ml-0.5">/{target}{unit}</span>
         )}
       </span>
       <span className="text-xs text-zinc-400">{label}</span>
@@ -162,16 +252,11 @@ function MealCard({ meal, onAddFood, onUpdateItem, onRemoveItem, onDeleteMeal })
   const totals = sumMacros(meal.meal_items)
   const { Icon, label, color } = meta
 
-  // Proportions d'énergie au niveau du repas entier
-  const totalMacroKcal = MACRO_BARS.reduce(
-    (sum, m) => sum + totals[m.key] * m.kcalPerG, 0
-  )
-  const getPct = (m) =>
-    totalMacroKcal > 0 ? (totals[m.key] * m.kcalPerG) / totalMacroKcal * 100 : 0
+  const totalMacroKcal = MACRO_BARS.reduce((sum, m) => sum + totals[m.key] * m.kcalPerG, 0)
+  const getPct = (m) => totalMacroKcal > 0 ? (totals[m.key] * m.kcalPerG) / totalMacroKcal * 100 : 0
 
   return (
     <div className="flex flex-col bg-zinc-50 rounded-2xl border border-zinc-100 overflow-hidden">
-      {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-100">
         <div className="flex items-center gap-2">
           <Icon size={14} className={color} strokeWidth={1.75} />
@@ -181,16 +266,12 @@ function MealCard({ meal, onAddFood, onUpdateItem, onRemoveItem, onDeleteMeal })
           <span className="text-sm font-semibold text-zinc-600 tabular-nums">
             {Math.round(totals.kcal)} kcal
           </span>
-          <button
-            onClick={onDeleteMeal}
-            className="text-zinc-300 active:text-red-400 transition-colors"
-          >
+          <button onClick={onDeleteMeal} className="text-zinc-300 active:text-red-400 transition-colors">
             <Trash2 size={14} strokeWidth={1.75} />
           </button>
         </div>
       </div>
 
-      {/* Jauges + items */}
       <div className="flex flex-col">
         {meal.meal_items.length === 0 ? (
           <button
@@ -202,7 +283,6 @@ function MealCard({ meal, onAddFood, onUpdateItem, onRemoveItem, onDeleteMeal })
           </button>
         ) : (
           <>
-            {/* Jauges macros du repas */}
             <div className="flex flex-col gap-2 px-4 py-3 border-b border-zinc-100">
               {MACRO_BARS.map(m => (
                 <div key={m.key} className="flex items-center gap-2">
@@ -230,7 +310,6 @@ function MealCard({ meal, onAddFood, onUpdateItem, onRemoveItem, onDeleteMeal })
               />
             ))}
 
-            {/* Bouton léger pour ajouter un aliment */}
             <button
               onClick={onAddFood}
               className="flex items-center justify-center gap-1.5 w-full py-2.5 border-t border-zinc-100 text-xs font-medium text-zinc-400 active:bg-zinc-100 transition-colors"
@@ -245,19 +324,15 @@ function MealCard({ meal, onAddFood, onUpdateItem, onRemoveItem, onDeleteMeal })
   )
 }
 
-// ─── Ligne d'un aliment — nom + kcal + quantité éditable ──────
-// Pas de barres ici — elles sont au niveau du repas entier.
+// ─── Ligne d'un aliment ───────────────────────────────────────
 function MealItemRow({ item, isLast, onUpdate, onRemove }) {
   const [editing, setEditing] = useState(false)
   const [qty,     setQty]     = useState(String(item.quantity))
   const [unit,    setUnit]    = useState(item.unit)
   const [saving,  setSaving]  = useState(false)
 
-  // Kcal live pendant la saisie
-  const liveItem = editing && qty
-    ? { ...item, quantity: parseFloat(qty) || 0, unit }
-    : item
-  const macros = calcItemMacros(liveItem)
+  const liveItem = editing && qty ? { ...item, quantity: parseFloat(qty) || 0, unit } : item
+  const macros   = calcItemMacros(liveItem)
 
   const handleConfirm = async () => {
     if (!qty) return
@@ -273,12 +348,9 @@ function MealItemRow({ item, isLast, onUpdate, onRemove }) {
     setEditing(false)
   }
 
-  const borderClass = isLast ? '' : 'border-b border-zinc-100'
-
   return (
-    <div className={`flex items-center gap-3 px-4 py-3 ${borderClass}`}>
+    <div className={`flex items-center gap-3 px-4 py-3 ${isLast ? '' : 'border-b border-zinc-100'}`}>
       <div className="flex flex-col gap-1.5 flex-1 min-w-0">
-        {/* Nom + kcal */}
         <div className="flex items-center justify-between gap-2">
           <FoodIcon id={item.foods.icon} size={15} />
           <span className="text-sm font-medium text-zinc-900 truncate flex-1">{item.foods.name}</span>
@@ -287,7 +359,6 @@ function MealItemRow({ item, isLast, onUpdate, onRemove }) {
           </span>
         </div>
 
-        {/* Quantité — bouton ✏ ou champ inline */}
         {editing ? (
           <div className="flex items-center gap-2">
             <input
@@ -326,7 +397,6 @@ function MealItemRow({ item, isLast, onUpdate, onRemove }) {
         )}
       </div>
 
-      {/* Poubelle */}
       <button onClick={onRemove} className="text-zinc-300 active:text-red-400 transition-colors shrink-0">
         <Trash2 size={14} strokeWidth={1.75} />
       </button>
