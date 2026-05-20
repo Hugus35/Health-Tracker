@@ -8,3 +8,9 @@ export function calcBMR({ weight_kg, height_cm, age, sex }) {
   }
   return weight_kg ? Math.round(weight_kg * 30) : 2000
 }
+
+// ─── Icones des aliments et métriques —────────────────────────
+// Permet de faire le lien entre l'id stocké en base et l'icône à afficher.
+export function getIcon(icon_list, id) {
+  return id ? (icon_list.find(f => f.id === id) ?? null) : null
+}

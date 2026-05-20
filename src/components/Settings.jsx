@@ -1,16 +1,18 @@
-import { Apple, ChevronRight, Dumbbell, User } from 'lucide-react'
+import { Apple, ChevronRight, Dumbbell, Ruler, User } from 'lucide-react'
 import { useState } from 'react'
+import ActivitiesSheet from './ActivitiesSheet'
 import BottomSheet from './BottomSheet'
 import FoodsSheet from './FoodsSheet'
+import MetricsSheet from './MetricsSheet'
 import ProfileSheet from './ProfileSheet'
-import SportsSheet from './SportsSheet'
 
 // ─── Constantes ──────────────────────────────────────────────
 
 const SETTINGS_ITEMS = [
-  { id: 'profile',   label: 'Profil',        sub: 'Poids, objectif, macros',   Icon: User,     color: 'text-blue-500'    },
-  { id: 'foods',     label: 'Mes aliments',  sub: "Base d'aliments perso",     Icon: Apple,    color: 'text-emerald-500' },
-  { id: 'sports',    label: 'Mes sports',    sub: 'Catalogue de sports',       Icon: Dumbbell, color: 'text-orange-500'  },
+  { id: 'profile',     label: 'Profil',          sub: 'Poids, objectif, macros',      Icon: User,     color: 'text-blue-500'    },
+  { id: 'foods',       label: 'Mes aliments',    sub: "Base d'aliments perso",        Icon: Apple,    color: 'text-emerald-500' },
+  { id: 'activities',  label: 'Mes activités',   sub: 'Sports et exercices',          Icon: Dumbbell, color: 'text-orange-500'  },
+  { id: 'metrics',     label: 'Mes métriques',   sub: 'Reps, durée, distance…',       Icon: Ruler,    color: 'text-violet-500'  },
 ]
 
 // ─── Page principale Settings ─────────────────────────────────
@@ -50,8 +52,12 @@ export default function Settings({ settings, updateSettings }) {
         <FoodsSheet />
       </BottomSheet>
 
-      <BottomSheet open={openSheet === 'sports'} onClose={() => setOpenSheet(null)} title="Mes sports">
-        <SportsSheet />
+      <BottomSheet open={openSheet === 'activities'} onClose={() => setOpenSheet(null)} title="Mes activités">
+        <ActivitiesSheet />
+      </BottomSheet>
+
+      <BottomSheet open={openSheet === 'metrics'} onClose={() => setOpenSheet(null)} title="Mes métriques">
+        <MetricsSheet />
       </BottomSheet>
     </div>
   )

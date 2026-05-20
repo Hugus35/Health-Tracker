@@ -9,11 +9,17 @@ import {
   Dumbbell,
   Egg, Fish,
   Footprints,
-  GlassWater, Grape, IceCream, Leaf, Milk,
+  Gauge,
+  GlassWater, Grape,
+  Hash,
+  IceCream, Leaf, Milk,
   Minus,
   Moon,
   Nut,
-  Pizza, Salad, Sandwich, Soup,
+  Pizza,
+  Repeat2, Route,
+  Salad, Sandwich, Soup,
+  Timer,
   TrendingDown, TrendingUp,
   Utensils,
   UtensilsCrossed,
@@ -83,11 +89,6 @@ export const FOOD_ICONS = [
   { id: 'UtensilsCrossed', Icon: UtensilsCrossed, color: 'text-zinc-400'   },
 ]
 
-// Retourne l'entrée complète { id, Icon, color } depuis le nom stocké en DB
-export function getFoodIcon(id) {
-  return id ? (FOOD_ICONS.find(f => f.id === id) ?? null) : null
-}
-
 // ─── Icônes sports ────────────────────────────────────────────
 // Liste des icônes disponibles dans le picker de SportsSheet.
 // L'id (string) est stocké dans sport_types.icon en DB.
@@ -101,9 +102,17 @@ export const SPORT_ICONS = [
   { id: 'Volleyball', Icon: Volleyball, color: 'text-yellow-500'  },
 ]
 
-export function getSportIcon(id) {
-  return id ? (SPORT_ICONS.find(s => s.id === id) ?? null) : null
-}
+// ─── Icônes métriques ─────────────────────────────────────────
+// Temps, distance, poids/charge, vitesse + quelques génériques.
+export const METRIC_ICONS = [
+  { id: 'Timer',    Icon: Timer,    color: 'text-sky-500',    label: 'Temps'    },
+  { id: 'Route',    Icon: Route,    color: 'text-teal-500',   label: 'Distance' },
+  { id: 'Dumbbell', Icon: Dumbbell, color: 'text-blue-500',   label: 'Charge'   },
+  { id: 'Gauge',    Icon: Gauge,    color: 'text-red-500',    label: 'Vitesse'  },
+  { id: 'Hash',     Icon: Hash,     color: 'text-zinc-500',   label: 'Comptage' },
+  { id: 'Repeat2',  Icon: Repeat2,  color: 'text-violet-500', label: 'Séries'   },
+]
+
 
 // ─── Presets MET ──────────────────────────────────────────────
 // Valeurs suggérées lors de la création d'un sport.

@@ -2,10 +2,9 @@ import { Check, ChevronLeft, ChevronRight, Pencil, Plus, Trash2, X } from 'lucid
 import { useState } from 'react'
 import { calcItemMacros, sumMacros, useMeals } from '../hooks/useMeals'
 import { calcSessionKcal, useWorkouts } from '../hooks/useWorkouts'
-import { MACRO_BARS, MEAL_TYPES, UNITS } from '../lib/constants'
-import FoodIcon from './FoodIcon'
+import { FOOD_ICONS, MACRO_BARS, MEAL_TYPES, SPORT_ICONS, UNITS } from '../lib/constants'
+import { getIcon } from '../lib/utils'
 import MealModal from './MealModal'
-import SportIcon from './SportIcon'
 import WorkoutModal from './WorkoutModal'
 
 function todayISO() {
@@ -18,10 +17,10 @@ export default function Journal({ settings }) {
   const [tab,  setTab]  = useState('meals') // 'meals' | 'sport'
 
   const { meals, loading: loadingMeals, addMeal, addMealItem, updateMealItem, removeMealItem, deleteMeal } = useMeals(date)
-  const { sessions, loading: loadingSport, addSession, deleteSession } = useWorkouts(date)
+  const { sessions, loading: loadingSport, addFullSession, updateFullSession, renameSession, deleteSession } = useWorkouts(date)
 
   const [mealModal,    setMealModal]    = useState(null)
-  const [workoutModal, setWorkoutModal] = useState(false)
+  const [workoutModal, setWorkoutModal] = useState(null)
 
   const isToday   = date === todayISO()
   const goBack    = () => setDate(d => { const dt = new Date(d + 'T12:00:00'); dt.setDate(dt.getDate() - 1); return dt.toISOString().slice(0, 10) })
@@ -171,6 +170,9 @@ export default function Journal({ settings }) {
                   key={session.id}
                   session={session}
                   weightKg={settings?.weight_kg ?? 0}
+                  onRename={(id, name) => renameSession(id, name)}
+                  onEditItem={(itemId) => { console.log('[Journal] open modal → metrics', itemId); setWorkoutModal({ session, initialEditingItemId: itemId }) }}
+                  onAddActivity={() => { console.log('[Journal] open modal → picker', session.id); setWorkoutModal({ session }) }}
                   onDelete={() => deleteSession(session.id)}
                 />
               ))}
@@ -178,8 +180,8 @@ export default function Journal({ settings }) {
           )}
 
           <button
-            onClick={() => setWorkoutModal(true)}
-            className="flex items-center justify-center gap-2 bg-zinc-900 text-white rounded-2xl py-3.5 text-sm font-medium active:scale-[0.98] transition-all"
+            onClick={() => { console.log('[Journal] open modal → new session'); setWorkoutModal('new') }}
+            className="flex items-center justify-center gap-2 bg-zinc-900 text-white rounded-2xl py-3.5 text-sm font-medium active:scale-[0.98] transition-all mt-1"
           >
             <Plus size={16} strokeWidth={2.5} />
             Ajouter une séance
@@ -199,30 +201,113 @@ export default function Journal({ settings }) {
         addMealItem={addMealItem}
       />
       <WorkoutModal
-        open={workoutModal}
-        onClose={() => setWorkoutModal(false)}
-        onAdd={addSession}
+        key={workoutModal === 'new' ? 'new' : `${workoutModal?.session?.id ?? ''}-${workoutModal?.initialEditingItemId ?? ''}`}
+        open={workoutModal !== null}
+        onClose={() => setWorkoutModal(null)}
+        session={workoutModal !== 'new' ? workoutModal?.session ?? null : null}
+        initialEditingItemId={workoutModal?.initialEditingItemId}
+        onAdd={addFullSession}
+        onUpdate={updateFullSession}
       />
     </div>
   )
 }
 
+
 // ─── Carte d'une séance ───────────────────────────────────────
-function WorkoutCard({ session, weightKg, onDelete }) {
-  const kcal = Math.round(calcSessionKcal(session, weightKg))
+function WorkoutCard({ session, onRename, onEditItem, onAddActivity, onDelete }) {
+  const [editingName, setEditingName] = useState(false)
+  const [name,        setName]        = useState(session.name)
+  const [renaming,    setRenaming]    = useState(false)
+
+  //const kcal     = Math.round(calcSessionKcal(session, weightKg))
+  const totalMin = (session.workout_items ?? []).reduce((sum, item) => sum + (item.duration_min ?? 0), 0)
+  const items    = (session.workout_items ?? []).sort((a, b) => a.item_order - b.item_order)
+
+  const handleNameBlur = async () => {
+    const trimmed = name.trim()
+    if (!trimmed) { setName(session.name); setEditingName(false); return }
+    if (trimmed === session.name) { setEditingName(false); return }
+    setRenaming(true)
+    await onRename(session.id, trimmed)
+    setRenaming(false)
+    setEditingName(false)
+  }
 
   return (
-    <div className="flex items-center justify-between bg-zinc-50 rounded-2xl border border-zinc-100 px-4 py-3.5">
-      <div className="flex items-center gap-3">
-        <SportIcon id={session.sport_types.icon} />
-        <div className="flex flex-col gap-0.5">
-          <span className="text-sm font-semibold text-zinc-900">{session.sport_types.name}</span>
-          <span className="text-xs text-zinc-400">{session.duration_min} min · {kcal} kcal brûlées</span>
+    <div className="bg-zinc-50 rounded-2xl border border-zinc-100 overflow-hidden">
+      {/* Header */}
+      <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-100">
+        {editingName ? (
+          <input
+            autoFocus
+            value={name}
+            onChange={e => setName(e.target.value)}
+            onBlur={handleNameBlur}
+            onKeyDown={e => {
+              if (e.key === 'Enter')  e.target.blur()
+              if (e.key === 'Escape') { setName(session.name); setEditingName(false) }
+            }}
+            disabled={renaming}
+            className="flex-1 min-w-0 mr-3 bg-white border border-zinc-300 rounded-lg px-2.5 py-1 text-sm font-semibold text-zinc-900 focus:outline-none focus:ring-2 focus:ring-zinc-900 transition-colors"
+          />
+        ) : (
+          <button
+            onClick={() => setEditingName(true)}
+            className="text-sm font-semibold text-zinc-900 truncate flex-1 min-w-0 mr-3 text-left"
+          >
+            {session.name}
+          </button>
+        )}
+        <div className="flex items-center gap-3 shrink-0">
+          {totalMin > 0 && <span className="text-sm font-semibold text-zinc-600 tabular-nums">{totalMin} min</span>}
+          <button onClick={onDelete} className="text-zinc-300 active:text-red-400 transition-colors">
+            <Trash2 size={14} strokeWidth={1.75} />
+          </button>
         </div>
       </div>
-      <button onClick={onDelete} className="text-zinc-300 active:text-red-400 transition-colors">
-        <Trash2 size={14} strokeWidth={1.75} />
+
+      {/* Items */}
+      <div className="flex flex-col divide-y divide-zinc-100">
+        {items.map((item) => {
+          const activity    = item.activities
+          const iconEntry   = getIcon(SPORT_ICONS, activity?.icon)
+          const otherValues = (item.workout_item_values ?? [])
+            .map(v => `${v.value}${v.metrics?.unit ? ' ' + v.metrics.unit : ''}`.trim())
+            .filter(Boolean)
+
+          return (
+            <button
+              key={item.id}
+              onClick={() => onEditItem(item.id)}
+              className="flex items-center gap-3 px-4 py-3 text-left w-full active:bg-zinc-100 transition-colors"
+            >
+              {iconEntry && <iconEntry.Icon size={18} strokeWidth={1.75} className={`${iconEntry.color} shrink-0`} />}
+              <div className="flex flex-col gap-0.5 flex-1 min-w-0">
+                <span className="text-sm font-medium text-zinc-900">{activity?.name}</span>
+                {otherValues.length > 0 && <span className="text-xs text-zinc-400">{otherValues.join(' · ')}</span>}
+              </div>
+              {item.duration_min > 0 && (
+                <span className="text-xs text-zinc-400 shrink-0 mr-1">{item.duration_min} min</span>
+              )}
+              <ChevronRight size={14} strokeWidth={1.75} className="text-zinc-300 shrink-0" />
+            </button>
+          )
+        })}
+      </div>
+
+      {/* Ajouter une activité */}
+      <button
+        onClick={onAddActivity}
+        className="flex items-center justify-center gap-1.5 w-full py-2.5 border-t border-zinc-100 text-xs font-medium text-zinc-400 active:bg-zinc-100 transition-colors"
+      >
+        <Plus size={12} strokeWidth={2.5} />
+        Ajouter une activité
       </button>
+
+      {session.notes && (
+        <p className="px-4 py-2 text-xs text-zinc-400 border-t border-zinc-100">{session.notes}</p>
+      )}
     </div>
   )
 }
@@ -352,7 +437,7 @@ function MealItemRow({ item, isLast, onUpdate, onRemove }) {
     <div className={`flex items-center gap-3 px-4 py-3 ${isLast ? '' : 'border-b border-zinc-100'}`}>
       <div className="flex flex-col gap-1.5 flex-1 min-w-0">
         <div className="flex items-center justify-between gap-2">
-          <FoodIcon id={item.foods.icon} size={15} />
+          {(() => { const e = getIcon(FOOD_ICONS, item.foods.icon); return e ? <e.Icon size={15} strokeWidth={1.75} className={`${e.color} shrink-0`} /> : null })()}
           <span className="text-sm font-medium text-zinc-900 truncate flex-1">{item.foods.name}</span>
           <span className="text-xs font-medium text-zinc-400 tabular-nums shrink-0">
             {Math.round(macros.kcal)} kcal

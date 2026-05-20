@@ -2,9 +2,9 @@ import { useState } from 'react'
 import { Search, X, Plus } from 'lucide-react'
 import BottomSheet from './BottomSheet'
 import FoodsSheet from './FoodsSheet'
-import FoodIcon from './FoodIcon'
 import { useFoods } from '../hooks/useFoods'
-import { MEAL_TYPES, UNITS } from '../lib/constants'
+import { FOOD_ICONS, MEAL_TYPES, UNITS } from '../lib/constants'
+import { getIcon } from '../lib/utils'
 
 // ─── MealModal ────────────────────────────────────────────────
 // mealId = null  → nouveau repas : TypeStep puis ajout d'aliments
@@ -143,7 +143,7 @@ function FoodsStep({ onAddItem, onBack }) {
           <div className="bg-zinc-50 border border-zinc-200 rounded-2xl p-4 flex flex-col gap-3">
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-2 min-w-0">
-                <FoodIcon id={selectedFood.icon} />
+                {(() => { const e = getIcon(FOOD_ICONS, selectedFood.icon); return e ? <e.Icon size={18} strokeWidth={1.75} className={`${e.color} shrink-0`} /> : null })()}
                 <div className="flex flex-col min-w-0">
                   <span className="text-sm font-semibold text-zinc-900 truncate">{selectedFood.name}</span>
                   {selectedFood.brand && <span className="text-xs text-zinc-400">{selectedFood.brand}</span>}
@@ -202,7 +202,7 @@ function FoodsStep({ onAddItem, onBack }) {
                   className={`flex items-center gap-3 px-4 py-3 text-left active:bg-zinc-100 transition-colors ${
                     i < recents.length - 1 ? 'border-b border-zinc-100' : ''
                   }`}>
-                  <FoodIcon id={food.icon} />
+                  {(() => { const e = getIcon(FOOD_ICONS, food.icon); return e ? <e.Icon size={18} strokeWidth={1.75} className={`${e.color} shrink-0`} /> : null })()}
                   <div className="flex flex-col gap-0.5 min-w-0">
                     <span className="text-sm font-medium text-zinc-900 truncate">
                       {food.name}{food.brand ? <span className="font-normal text-zinc-400"> · {food.brand}</span> : null}
@@ -223,7 +223,7 @@ function FoodsStep({ onAddItem, onBack }) {
                 className={`flex items-center gap-3 px-4 py-3 text-left active:bg-zinc-100 transition-colors ${
                   i < Math.min(filtered.length, 8) - 1 ? 'border-b border-zinc-100' : ''
                 }`}>
-                <FoodIcon id={food.icon} />
+                {(() => { const e = getIcon(FOOD_ICONS, food.icon); return e ? <e.Icon size={18} strokeWidth={1.75} className={`${e.color} shrink-0`} /> : null })()}
                 <div className="flex flex-col gap-0.5 min-w-0">
                   <span className="text-sm font-medium text-zinc-900 truncate">
                     {food.name}{food.brand ? <span className="font-normal text-zinc-400"> · {food.brand}</span> : null}

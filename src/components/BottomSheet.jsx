@@ -1,5 +1,5 @@
+import { Pencil, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { X } from 'lucide-react'
 
 // ─── BottomSheet — modale qui glisse depuis le bas ──────────
 // Pattern iOS classique : backdrop semi-transparent + panneau arrondi en haut.
@@ -8,11 +8,13 @@ import { X } from 'lucide-react'
 // zIndex peut être augmenté pour les BottomSheet imbriqués (défaut : 50).
 // Les enfants sont démontés après l'animation de fermeture (300ms) — l'état
 // interne est réinitialisé à chaque réouverture.
-export default function BottomSheet({ open, onClose, title, children, zIndex = 50 }) {
-  const [mounted, setMounted] = useState(false)
+export default function BottomSheet({ open, onClose, title, onTitleChange, children, zIndex = 50 }) {
+  const [mounted,      setMounted]      = useState(false)
+  const [editingTitle, setEditingTitle] = useState(false)
 
   useEffect(() => {
     if (open) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setMounted(true)
     } else {
       const t = setTimeout(() => setMounted(false), 300)
@@ -51,10 +53,34 @@ export default function BottomSheet({ open, onClose, title, children, zIndex = 5
 
           {/* Header */}
           <div className="flex items-center justify-between px-5 pb-4 pt-2">
-            <h3 className="text-lg font-semibold tracking-tight text-zinc-900">{title}</h3>
+            {onTitleChange ? (
+              editingTitle ? (
+                <input
+                  autoFocus
+                  type="text"
+                  value={title}
+                  onChange={e => onTitleChange(e.target.value)}
+                  onBlur={() => setEditingTitle(false)}
+                  onKeyDown={e => { if (e.key === 'Enter' || e.key === 'Escape') e.target.blur() }}
+                  className="flex-1 mr-3 bg-transparent text-lg font-semibold tracking-tight text-zinc-900 focus:outline-none border-b border-zinc-300"
+                />
+              ) : (
+                <button
+                  onClick={() => setEditingTitle(true)}
+                  className="flex items-center gap-2 text-left"
+                >
+                  <h3 className={`text-lg font-semibold tracking-tight ${title ? 'text-zinc-900' : 'text-zinc-300'}`}>
+                    {title || 'Nouvelle séance'}
+                  </h3>
+                  <Pencil size={13} strokeWidth={2} className="text-zinc-400 shrink-0" />
+                </button>
+              )
+            ) : (
+              <h3 className="text-lg font-semibold tracking-tight text-zinc-900">{title}</h3>
+            )}
             <button
               onClick={onClose}
-              className="p-1 -m-1 text-zinc-400 active:text-zinc-600 transition-colors"
+              className="p-1 -m-1 text-zinc-400 active:text-zinc-600 transition-colors shrink-0"
             >
               <X size={20} strokeWidth={2} />
             </button>

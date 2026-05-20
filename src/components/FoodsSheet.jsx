@@ -1,8 +1,8 @@
-import { ChevronLeft, Plus, Trash2 } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Plus, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import { useFoods } from '../hooks/useFoods'
 import { FOOD_ICONS, UNITS } from '../lib/constants'
-import FoodIcon from './FoodIcon'
+import { getIcon } from '../lib/utils'
 
 // ─── FoodsSheet — gestion de la base d'aliments ─────────────
 // Deux vues : 'list' (par défaut) et 'form' (création/édition).
@@ -71,7 +71,7 @@ export default function FoodsSheet({ initialEditing = null, initialName = '', on
                 i < foods.length - 1 ? 'border-b border-zinc-100' : ''
               }`}
             >
-              <FoodIcon id={f.icon} />
+              {(() => { const e = getIcon(FOOD_ICONS, f.icon); return e ? <e.Icon size={18} strokeWidth={1.75} className={`${e.color} shrink-0`} /> : null })()}
               <div className="flex flex-col gap-0.5 flex-1 min-w-0">
                 <span className="text-sm font-medium text-zinc-900 truncate">
                   {f.name}{f.brand ? <span className="font-normal text-zinc-400"> · {f.brand}</span> : null}
@@ -80,6 +80,7 @@ export default function FoodsSheet({ initialEditing = null, initialName = '', on
                   {f.kcal} kcal · {f.proteins}g protéines · {f.default_unit}
                 </span>
               </div>
+              <ChevronRight size={16} strokeWidth={1.75} className="text-zinc-300 shrink-0" />
             </button>
           ))}
         </div>
