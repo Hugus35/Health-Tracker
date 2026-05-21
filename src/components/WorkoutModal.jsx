@@ -36,7 +36,7 @@ export default function WorkoutModal({
   open, onClose,
   session = null,
   initialEditingItemId = null,
-  onAdd, onUpdate,
+  onAdd, onAddItem, onUpdateItem, onDeleteItem, onRenameSession,
 }) {
   // Gestion de l'état initial du modal selon le contexte (création vs édition, ajout d'item vs édition d'item)
   const isEditing = !!session
@@ -52,14 +52,21 @@ export default function WorkoutModal({
   const [saving,       setSaving]       = useState(false)
   const [error,        setError]        = useState(null)
 
+  // Fermeture — sauvegarde le nom si modifié
+  const handleClose = () => {
+    if (isEditing && name.trim() && name.trim() !== session.name) {
+      onRenameSession(session.id, name.trim())
+    }
+    onClose()
+  }
+
+  // Uniquement pour le flux création (SessionStep)
   const handleConfirm = async (itemsToSave) => {
     if (itemsToSave.length === 0) return
-    console.log('[WorkoutModal] confirm →', isEditing ? 'update' : 'add', itemsToSave.map(i => i.activity.name))
+    console.log('[WorkoutModal] confirm → add', itemsToSave.map(i => i.activity.name))
     setSaving(true)
     setError(null)
-    const result = isEditing
-      ? await onUpdate(session.id, itemsToSave, null, name.trim() || null)
-      : await onAdd(itemsToSave, null, name.trim() || null)
+    const result = await onAdd(itemsToSave, null, name.trim() || null)
     if (result.error) { setError(result.error); setSaving(false) }
     else onClose()
   }
@@ -72,40 +79,61 @@ export default function WorkoutModal({
   }
 
   const handleMetricsConfirm = async (duration_min, values, activityMetrics) => {
-    const newItem      = { activity: pendingActivity, duration_min, values, activityMetrics }
-    const updatedItems = editingIndex !== null
-      ? items.map((item, i) => i === editingIndex ? newItem : item)
-      : [...items, newItem]
+    const newItem = { activity: pendingActivity, duration_min, values, activityMetrics }
 
-    console.log('[WorkoutModal] metricsConfirm', pendingActivity.name, { duration_min, values })
-    setPendingActivity(null)
-    setEditingIndex(null)
-    setItems(updatedItems)
-
-    if (isEditing) {
-      await handleConfirm(updatedItems)
-    } else {
+    if (!isEditing) {
+      // Flux création : mise à jour locale, retour à SessionStep
+      const updatedItems = editingIndex !== null
+        ? items.map((item, i) => i === editingIndex ? newItem : item)
+        : [...items, newItem]
+      console.log('[WorkoutModal] metricsConfirm (create)', pendingActivity.name)
+      setPendingActivity(null)
+      setEditingIndex(null)
+      setItems(updatedItems)
       setView('session')
+      return
     }
+
+    // Flux édition : opération granulaire
+    setSaving(true)
+    setError(null)
+    console.log('[WorkoutModal] metricsConfirm (edit)', pendingActivity.name, editingIndex !== null ? '→ update' : '→ add')
+    const result = initialIndex !== -1
+      ? await onUpdateItem(initialItems[initialIndex].id, newItem)
+      : await onAddItem(session.id, newItem)
+
+    if (result.error) { setError(result.error); setSaving(false); return }
+
+    if (name.trim() && name.trim() !== session.name) {
+      await onRenameSession(session.id, name.trim())
+    }
+    onClose()
+  }
+
+  const handleDeleteItem = async () => {
+    setSaving(true)
+    setError(null)
+    const result = await onDeleteItem(initialItems[initialIndex].id)
+    if (result.error) { setError(result.error); setSaving(false) }
+    else onClose()
   }
 
   const handleMetricsBack = () => {
-    if (isEditing) { onClose(); return }
+    if (isEditing) { handleClose(); return }
     const wasEditing = editingIndex !== null
-    console.log('[WorkoutModal] metrics → ', wasEditing ? 'session' : 'picker')
+    console.log('[WorkoutModal] metrics →', wasEditing ? 'session' : 'picker')
     setPendingActivity(null)
     setEditingIndex(null)
     setView(wasEditing ? 'session' : 'picker')
   }
 
   return (
-    <BottomSheet open={open} onClose={onClose} title={name} onTitleChange={setName}>
+    <BottomSheet open={open} onClose={handleClose} title={name} onTitleChange={setName}>
       {view === 'session' && (
         <SessionStep
           items={items}
           saving={saving}
           error={error}
-          isEditing={isEditing}
           onEditItem={handleEditItem}
           onRemoveItem={(i) => setItems(prev => prev.filter((_, j) => j !== i))}
           onPickActivity={() => setView('picker')}
@@ -115,7 +143,7 @@ export default function WorkoutModal({
       {view === 'picker' && (
         <PickerStep
           onSelect={(activity) => { setPendingActivity(activity); setView('metrics') }}
-          onBack={isEditing ? onClose : () => setView('session')}
+          onBack={isEditing ? handleClose : () => setView('session')}
           showBack={!isEditing}
         />
       )}
@@ -127,6 +155,7 @@ export default function WorkoutModal({
           saving={saving}
           onConfirm={handleMetricsConfirm}
           onBack={handleMetricsBack}
+          onDelete={isEditing && editingIndex !== null ? handleDeleteItem : null}
           showBack={!isEditing}
         />
       )}
@@ -135,7 +164,7 @@ export default function WorkoutModal({
 }
 
 // ─── SessionStep ──────────────────────────────────────────────
-function SessionStep({ items, saving, error, isEditing, onEditItem, onRemoveItem, onPickActivity, onConfirm }) {
+function SessionStep({ items, saving, error, onEditItem, onRemoveItem, onPickActivity, onConfirm }) {
   const formatSummary = (item) => {
     const parts = []
     if (item.duration_min) parts.push(`${item.duration_min} min`)
@@ -189,7 +218,7 @@ function SessionStep({ items, saving, error, isEditing, onEditItem, onRemoveItem
         disabled={items.length === 0 || saving}
         className="bg-zinc-900 text-white rounded-2xl py-3.5 text-sm font-medium disabled:opacity-30 active:scale-[0.98] transition-all"
       >
-        {saving ? 'Enregistrement…' : isEditing ? 'Mettre à jour' : 'Valider la séance'}
+        {saving ? 'Enregistrement…' : 'Valider la séance'}
       </button>
     </div>
   )
@@ -263,7 +292,7 @@ function PickerStep({ onSelect, onBack, showBack = true }) {
 }
 
 // ─── MetricsStep ──────────────────────────────────────────────
-function MetricsStep({ activity, initialDuration = '', initialValues = {}, saving = false, onConfirm, onBack, showBack = true }) {
+function MetricsStep({ activity, initialDuration = '', initialValues = {}, saving = false, onConfirm, onBack, onDelete = null, showBack = true }) {
   const { metrics, loading } = useActivityMetrics(activity.id)
   const [duration, setDuration] = useState(initialDuration)
   const [values,   setValues]   = useState(initialValues)
@@ -334,13 +363,24 @@ function MetricsStep({ activity, initialDuration = '', initialValues = {}, savin
         </div>
       )}
 
-      <button
-        onClick={() => onConfirm(duration, values, metrics)}
-        disabled={saving}
-        className="bg-zinc-900 text-white rounded-2xl py-3.5 text-sm font-medium disabled:opacity-30 active:scale-[0.98] transition-all"
-      >
-        {saving ? 'Enregistrement…' : 'Confirmer'}
-      </button>
+      <div className="flex gap-3">
+        {onDelete && (
+          <button
+            onClick={onDelete}
+            disabled={saving}
+            className="px-4 border border-red-200 rounded-2xl py-3.5 text-red-500 disabled:opacity-30 active:bg-red-50 transition-colors"
+          >
+            <Trash2 size={16} strokeWidth={1.75} />
+          </button>
+        )}
+        <button
+          onClick={() => onConfirm(duration, values, metrics)}
+          disabled={saving}
+          className="flex-1 bg-zinc-900 text-white rounded-2xl py-3.5 text-sm font-medium disabled:opacity-30 active:scale-[0.98] transition-all"
+        >
+          {saving ? 'Enregistrement…' : 'Confirmer'}
+        </button>
+      </div>
     </div>
   )
 }

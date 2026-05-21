@@ -10,8 +10,9 @@ export function useActivityMetrics(activityId) {
     if (!activityId) return
     supabase
       .from('activity_metrics')
-      .select('metric_id, metrics(id, label, unit)')
+      .select('metric_id, display_order, metrics(id, label, unit)')
       .eq('activity_id', activityId)
+      .order('display_order')
       .then(({ data }) => { setMetrics(data ?? []); setLoading(false) })
   }, [activityId])
 
@@ -57,7 +58,7 @@ export function useActivities() {
       if (insertError) throw insertError
 
       if (metrics.length > 0) {
-        const rows = metrics.map(m => ({ activity_id: data.id, metric_id: m.metric_id }))
+        const rows = metrics.map((m, i) => ({ activity_id: data.id, metric_id: m.metric_id, display_order: i }))
         const { error: metricsError } = await supabase.from('activity_metrics').insert(rows)
         if (metricsError) throw metricsError
       }
@@ -86,7 +87,7 @@ export function useActivities() {
         if (deleteError) throw deleteError
 
         if (metrics.length > 0) {
-          const rows = metrics.map(m => ({ activity_id: id, metric_id: m.metric_id }))
+          const rows = metrics.map((m, i) => ({ activity_id: id, metric_id: m.metric_id, display_order: i }))
           const { error: insertError } = await supabase.from('activity_metrics').insert(rows)
           if (insertError) throw insertError
         }

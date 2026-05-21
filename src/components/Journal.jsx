@@ -17,7 +17,7 @@ export default function Journal({ settings }) {
   const [tab,  setTab]  = useState('meals') // 'meals' | 'sport'
 
   const { meals, loading: loadingMeals, addMeal, addMealItem, updateMealItem, removeMealItem, deleteMeal } = useMeals(date)
-  const { sessions, loading: loadingSport, addFullSession, updateFullSession, renameSession, deleteSession } = useWorkouts(date)
+  const { sessions, loading: loadingSport, addFullSession, addWorkoutItem, updateWorkoutItem, deleteWorkoutItem, renameSession, deleteSession } = useWorkouts(date)
 
   const [mealModal,    setMealModal]    = useState(null)
   const [workoutModal, setWorkoutModal] = useState(null)
@@ -207,7 +207,10 @@ export default function Journal({ settings }) {
         session={workoutModal !== 'new' ? workoutModal?.session ?? null : null}
         initialEditingItemId={workoutModal?.initialEditingItemId}
         onAdd={addFullSession}
-        onUpdate={updateFullSession}
+        onAddItem={addWorkoutItem}
+        onUpdateItem={updateWorkoutItem}
+        onDeleteItem={deleteWorkoutItem}
+        onRenameSession={renameSession}
       />
     </div>
   )
@@ -272,8 +275,13 @@ function WorkoutCard({ session, onRename, onEditItem, onAddActivity, onDelete })
         {items.map((item) => {
           const activity    = item.activities
           const iconEntry   = getIcon(SPORT_ICONS, activity?.icon)
+          const metricOrder = Object.fromEntries(
+            (activity?.activity_metrics ?? []).map(am => [am.metric_id, am.display_order])
+          )
           const otherValues = (item.workout_item_values ?? [])
-            .map(v => `${v.value}${v.metrics?.unit ? ' ' + v.metrics.unit : ''}`.trim())
+            .slice()
+            .sort((a, b) => (metricOrder[a.metric_id] ?? 99) - (metricOrder[b.metric_id] ?? 99))
+            .map(v => v.metrics?.unit ? `${v.value} ${v.metrics.unit}` : `${v.value} ${v.metrics?.label ?? ''}`.trim())
             .filter(Boolean)
 
           return (

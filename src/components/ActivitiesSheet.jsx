@@ -1,8 +1,11 @@
+import { DndContext, PointerSensor, TouchSensor, closestCenter, useSensor, useSensors } from '@dnd-kit/core'
+import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
+import { ChevronLeft, ChevronRight, GripVertical, Plus, Trash2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { ChevronLeft, ChevronRight, Plus, Trash2 } from 'lucide-react'
 import { useActivities, useActivityMetrics } from '../hooks/useActivities'
 import { useMetrics } from '../hooks/useMetrics'
-import { SPORT_ICONS, METRIC_ICONS, MET_PRESETS } from '../lib/constants'
+import { METRIC_ICONS, MET_PRESETS, SPORT_ICONS } from '../lib/constants'
 import { getIcon } from '../lib/utils'
 
 // ─── ActivitiesSheet — gestion du catalogue d'activités ──────
@@ -105,6 +108,7 @@ function ActivityForm({ activity, onCancel, onSave, onArchive }) {
   const [selectedMetrics, setSelectedMetrics] = useState([])
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setSelectedMetrics(existingMetrics.map(({ metric_id }) => ({ metric_id })))
   }, [existingMetrics])
 
@@ -137,6 +141,20 @@ function ActivityForm({ activity, onCancel, onSave, onArchive }) {
       setError(`Erreur : ${error}`)
       setSaving(false)
     }
+  }
+
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(TouchSensor, { activationConstraint: { delay: 150, tolerance: 5 } }),
+  )
+
+  const handleDragEnd = ({ active, over }) => {
+    if (!over || active.id === over.id) return
+    setSelectedMetrics(prev => {
+      const from = prev.findIndex(m => m.metric_id === active.id)
+      const to   = prev.findIndex(m => m.metric_id === over.id)
+      return arrayMove(prev, from, to)
+    })
   }
 
   return (
@@ -243,14 +261,60 @@ function ActivityForm({ activity, onCancel, onSave, onArchive }) {
       </div>
 
       {/* Métriques associées */}
-      <div>
-        <label className="text-xs font-semibold text-zinc-400 uppercase tracking-widest mb-1 block">
-          Métriques <span className="normal-case font-normal">(optionnel)</span>
-        </label>
-        <p className="text-xs text-zinc-400 mb-3">
-          Sélectionne les métriques à saisir lors d'une séance.
-        </p>
+      <div className="flex flex-col gap-3">
+        <div>
+          <label className="text-xs font-semibold text-zinc-400 uppercase tracking-widest mb-1 block">
+            Métriques <span className="normal-case font-normal">(optionnel)</span>
+          </label>
+          <p className="text-xs text-zinc-400">
+            Sélectionne les métriques à saisir lors d'une séance.
+          </p>
+        </div>
 
+        {/* Ordre + aperçu — visible dès qu'au moins une métrique est cochée */}
+        {selectedMetrics.length > 0 && (
+          <div className="bg-zinc-50 border border-zinc-200 rounded-2xl overflow-hidden">
+            {/* Aperçu */}
+            <div className="px-4 py-2.5 border-b border-zinc-100">
+              <p className="text-xs text-zinc-400">
+                Aperçu :{' '}
+                <span className="text-zinc-600 font-medium">
+                  {selectedMetrics
+                    .map(({ metric_id }) => {
+                      const m = allMetrics.find(am => am.id === metric_id)
+                      return m ? (m.unit ? `x ${m.unit}` : `x ${m.label}`) : null
+                    })
+                    .filter(Boolean)
+                    .join(' · ')}
+                </span>
+              </p>
+            </div>
+
+            {/* Liste ordonnée — drag & drop */}
+            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+              <SortableContext
+                items={selectedMetrics.map(m => m.metric_id)}
+                strategy={verticalListSortingStrategy}
+              >
+                {selectedMetrics.map(({ metric_id }, i) => {
+                  const m = allMetrics.find(am => am.id === metric_id)
+                  if (!m) return null
+                  return (
+                    <SortableMetricRow
+                      key={metric_id}
+                      metric_id={metric_id}
+                      label={m.label}
+                      unit={m.unit}
+                      isLast={i === selectedMetrics.length - 1}
+                    />
+                  )
+                })}
+              </SortableContext>
+            </DndContext>
+          </div>
+        )}
+
+        {/* Checkboxes */}
         {metricsLoading || existingLoading ? (
           <p className="text-xs text-zinc-400 py-2">Chargement…</p>
         ) : allMetrics.length === 0 ? (
@@ -260,7 +324,6 @@ function ActivityForm({ activity, onCancel, onSave, onArchive }) {
             {allMetrics.map((m, i) => {
               const selected  = isMetricSelected(m.id)
               const iconEntry = getIcon(METRIC_ICONS, m.icon)
-
               return (
                 <button
                   key={m.id}
@@ -269,7 +332,6 @@ function ActivityForm({ activity, onCancel, onSave, onArchive }) {
                     i < allMetrics.length - 1 ? 'border-b border-zinc-100' : ''
                   } ${selected ? 'bg-zinc-50' : 'bg-white active:bg-zinc-50'}`}
                 >
-                  {/* Checkbox visuelle */}
                   <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 transition-colors ${
                     selected ? 'bg-zinc-900 border-zinc-900' : 'border-zinc-300'
                   }`}>
@@ -279,8 +341,6 @@ function ActivityForm({ activity, onCancel, onSave, onArchive }) {
                       </svg>
                     )}
                   </div>
-
-                  {/* Icône + label */}
                   {iconEntry
                     ? <iconEntry.Icon size={16} strokeWidth={1.75} className={iconEntry.color} />
                     : <div className="w-4" />
@@ -289,7 +349,6 @@ function ActivityForm({ activity, onCancel, onSave, onArchive }) {
                     <span className="text-sm font-medium text-zinc-900">{m.label}</span>
                     {m.unit && <span className="text-xs text-zinc-400 ml-1.5">{m.unit}</span>}
                   </div>
-
                 </button>
               )
             })}
@@ -323,6 +382,25 @@ function ActivityForm({ activity, onCancel, onSave, onArchive }) {
           {saving ? 'Enregistrement…' : 'Enregistrer'}
         </button>
       </div>
+    </div>
+  )
+}
+
+// ─── SortableMetricRow — item draggable dans la liste ordonnée ─
+function SortableMetricRow({ metric_id, label, unit, isLast }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: metric_id })
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={{ transform: CSS.Transform.toString(transform), transition }}
+      className={`flex items-center gap-3 px-4 py-2.5 bg-zinc-50 ${isDragging ? 'opacity-50 z-10' : ''} ${isLast ? '' : 'border-b border-zinc-100'}`}
+    >
+      <button {...attributes} {...listeners} className="text-zinc-300 touch-none cursor-grab active:cursor-grabbing">
+        <GripVertical size={16} strokeWidth={1.75} />
+      </button>
+      <span className="text-sm font-medium text-zinc-900 flex-1">{label}</span>
+      {unit && <span className="text-xs text-zinc-400">{unit}</span>}
     </div>
   )
 }

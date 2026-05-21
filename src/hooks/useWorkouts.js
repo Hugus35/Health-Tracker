@@ -1,6 +1,19 @@
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 
+// ─── Helpers EAV ─────────────────────────────────────────────
+// values : { [metric_id]: string } tel que saisi dans le formulaire
+// Construit { item_id, metric_id, value } pour chaque valeur non vide, et insère dans workout_item_values.
+async function insertItemValues(itemId, values) {
+  const rows = Object.entries(values)
+    .filter(([, v]) => v !== '' && v !== null && v !== undefined)
+    .map(([metric_id, v]) => ({ item_id: itemId, metric_id, value: parseFloat(v) }))
+  if (rows.length === 0) return
+  const { error } = await supabase.from('workout_item_values').insert(rows)
+  if (error) throw error
+}
+
+
 // ─── useWorkouts — séances de sport d'un jour donné ──────────
 // Charge les sessions avec leurs items, activités et valeurs.
 export function useWorkouts(date) {
@@ -12,7 +25,7 @@ export function useWorkouts(date) {
     try {
       const { data } = await supabase
         .from('workout_sessions')
-        .select('*, workout_items(*, activities(*), workout_item_values(*, metrics(*)))')
+        .select('*, workout_items(*, activities(*, activity_metrics(*)), workout_item_values(*, metrics(*)))')
         .eq('date', date)
         .order('created_at')
       console.log(`[useWorkouts] load ${date} →`, data?.length ?? 0, 'session(s)')
@@ -51,23 +64,9 @@ export function useWorkouts(date) {
       if (itemsError) throw itemsError
 
       // 3. Valeurs EAV (hors duration_min)
-      const values = insertedItems.flatMap((dbItem, i) =>
-        Object.entries(items[i].values)
-          .filter(([, v]) => v !== '' && v !== null && v !== undefined)
-          .map(([metric_id, value]) => ({
-            item_id: dbItem.id,
-            metric_id,
-            value:   parseFloat(value),
-          }))
-      )
-      if (values.length > 0) {
-        const { error: valuesError } = await supabase
-          .from('workout_item_values')
-          .insert(values)
-        if (valuesError) throw valuesError
-      }
+      await Promise.all(insertedItems.map((dbItem, i) => insertItemValues(dbItem.id, items[i].values)))
 
-      console.log('[useWorkouts] addFullSession ✓', { sessionId: session.id, items: values.length, values: values.length })
+      console.log('[useWorkouts] addFullSession ✓', { sessionId: session.id, items: insertedItems.length })
       await load()
       return {}
     } catch (err) {
@@ -76,56 +75,75 @@ export function useWorkouts(date) {
     }
   }, [date, load])
 
-  // Met à jour une session existante : update nom/notes + delete/reinsert items+valeurs
-  const updateFullSession = useCallback(async (sessionId, items, notes = null, name = null) => {
-    console.log('[useWorkouts] updateFullSession', sessionId, items.map(i => i.activity.name), { name, notes })
+  // Ajoute un item à une session existante
+  const addWorkoutItem = useCallback(async (sessionId, item) => {
+    console.log('[useWorkouts] addWorkoutItem', sessionId, item.activity.name)
     try {
-      // 1. Update session
-      const sessionName = name || items.map(i => i.activity.name).join(', ')
-      const { error: sessionError } = await supabase
-        .from('workout_sessions')
-        .update({ name: sessionName, notes })
-        .eq('id', sessionId)
-      if (sessionError) throw sessionError
+      const session  = sessions.find(s => s.id === sessionId)
+      const maxOrder = Math.max(-1, ...(session?.workout_items ?? []).map(i => i.item_order))
 
-      // 2. Supprimer les items existants (cascade sur workout_item_values)
-      const { error: deleteError } = await supabase
+      const { data: dbItem, error: itemError } = await supabase
         .from('workout_items')
-        .delete()
-        .eq('session_id', sessionId)
-      if (deleteError) throw deleteError
-
-      // 3. Réinsérer les items
-      const { data: insertedItems, error: itemsError } = await supabase
-        .from('workout_items')
-        .insert(items.map((item, i) => ({
+        .insert({
           session_id:   sessionId,
           activity_id:  item.activity.id,
-          item_order:   i,
+          item_order:   maxOrder + 1,
           duration_min: item.duration_min ? parseFloat(item.duration_min) : null,
-        })))
+        })
         .select()
-      if (itemsError) throw itemsError
+        .single()
+      if (itemError) throw itemError
 
-      // 4. Réinsérer les valeurs EAV
-      const values = insertedItems.flatMap((dbItem, i) =>
-        Object.entries(items[i].values)
-          .filter(([, v]) => v !== '' && v !== null && v !== undefined)
-          .map(([metric_id, value]) => ({ item_id: dbItem.id, metric_id, value: parseFloat(value) }))
-      )
-      if (values.length > 0) {
-        const { error: valuesError } = await supabase.from('workout_item_values').insert(values)
-        if (valuesError) throw valuesError
-      }
+      await insertItemValues(dbItem.id, item.values)
 
-      console.log('[useWorkouts] updateFullSession ✓', sessionId)
+      console.log('[useWorkouts] addWorkoutItem ✓', dbItem.id)
       await load()
       return {}
     } catch (err) {
-      console.error('[useWorkouts] updateFullSession ✗', err.message)
+      console.error('[useWorkouts] addWorkoutItem ✗', err.message)
+      return { error: err.message }
+    }
+  }, [sessions, load])
+
+  // Met à jour les métriques d'un item existant
+  const updateWorkoutItem = useCallback(async (itemId, item) => {
+    console.log('[useWorkouts] updateWorkoutItem', itemId, item.activity.name)
+    try {
+      const { error: updateError } = await supabase
+        .from('workout_items')
+        .update({ duration_min: item.duration_min ? parseFloat(item.duration_min) : null })
+        .eq('id', itemId)
+      if (updateError) throw updateError
+
+      const { error: deleteError } = await supabase.from('workout_item_values').delete().eq('item_id', itemId)
+      if (deleteError) throw deleteError
+      await insertItemValues(itemId, item.values)
+
+      console.log('[useWorkouts] updateWorkoutItem ✓', itemId)
+      await load()
+      return {}
+    } catch (err) {
+      console.error('[useWorkouts] updateWorkoutItem ✗', err.message)
       return { error: err.message }
     }
   }, [load])
+
+  // Supprime un item (cascade sur workout_item_values)
+  const deleteWorkoutItem = useCallback(async (itemId) => {
+    console.log('[useWorkouts] deleteWorkoutItem', itemId)
+    try {
+      const { error } = await supabase.from('workout_items').delete().eq('id', itemId)
+      if (error) throw error
+      setSessions(prev => prev.map(s => ({
+        ...s,
+        workout_items: (s.workout_items ?? []).filter(i => i.id !== itemId),
+      })))
+      return {}
+    } catch (err) {
+      console.error('[useWorkouts] deleteWorkoutItem ✗', err.message)
+      return { error: err.message }
+    }
+  }, [])
 
   const deleteSession = useCallback(async (id) => {
     try {
@@ -151,7 +169,7 @@ export function useWorkouts(date) {
     }
   }, [])
 
-  return { sessions, loading, addFullSession, updateFullSession, deleteSession, renameSession, reload: load }
+  return { sessions, loading, addFullSession, addWorkoutItem, updateWorkoutItem, deleteWorkoutItem, deleteSession, renameSession, reload: load }
 }
 
 // ─── Kcal brûlées pour une session (côté client, jamais stocké) ──

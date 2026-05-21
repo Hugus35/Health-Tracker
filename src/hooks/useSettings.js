@@ -21,6 +21,7 @@ export function useSettings() {
     }
   }, [])
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { fetchSettings() }, [fetchSettings])
 
   const updateSettings = useCallback(async (updates) => {
